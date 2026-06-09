@@ -89,6 +89,25 @@ final class CodeOwnersTests: XCTestCase {
         XCTAssertEqual(owners.owners(for: "src/sub/a.swift"), [])
     }
 
+    // MARK: - Sibling anchoring (regression: directory ownership must not leak)
+
+    func testDirectoryRuleDoesNotOwnSiblingPrefixes() {
+        // `/docs/` owns `docs/...` but must not own a sibling like `docs-internal/`.
+        let owners = CodeOwners.parse("/docs/ @docs-team")
+        XCTAssertEqual(owners.owners(for: "docs/x.md"), ["@docs-team"])
+        XCTAssertEqual(owners.owners(for: "docs/sub/x.md"), ["@docs-team"])
+        XCTAssertEqual(owners.owners(for: "docs-internal/x.md"), [])
+        XCTAssertEqual(owners.owners(for: "docsite/x.md"), [])
+    }
+
+    func testSrcDirectoryRuleDoesNotOwnSiblingPrefixes() {
+        let owners = CodeOwners.parse("/src/ @src-team")
+        XCTAssertEqual(owners.owners(for: "src/a.go"), ["@src-team"])
+        XCTAssertEqual(owners.owners(for: "src/deep/a.go"), ["@src-team"])
+        XCTAssertEqual(owners.owners(for: "srcgen/a.go"), [])
+        XCTAssertEqual(owners.owners(for: "src-old/a.go"), [])
+    }
+
     func testStandardLocationsOrder() {
         XCTAssertEqual(CodeOwners.standardLocations, [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"])
     }

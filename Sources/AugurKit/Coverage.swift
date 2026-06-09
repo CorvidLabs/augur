@@ -385,6 +385,12 @@ public enum CoverageParser {
     /// line in `startLine...endLine` is instrumented; the block is covered when
     /// `count` > 0. Blocks accumulate per file, so a line is covered when *any*
     /// block over it has `count` > 0.
+    /// The largest line span a single Go coverprofile block may declare before it
+    /// is rejected as implausible. No real source file approaches a million lines,
+    /// so this bounds allocation against a crafted profile without affecting any
+    /// legitimate coverage data.
+    static let maxGoBlockSpan = 1_000_000
+
     /// - Parameter contents: The coverprofile text.
     /// - Returns: The parsed report.
     public static func parseGoProfile(_ contents: String) -> CoverageReport {
@@ -394,6 +400,12 @@ public enum CoverageParser {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("mode:") { continue }
             guard let block = parseGoBlock(line) else { continue }
+            // Guard against a malicious or corrupt profile whose block spans an
+            // absurd line range (e.g. `f.go:1.0,2000000000.0 3 1`): materializing
+            // every line into the set would allocate multiple gigabytes and hang.
+            // Real coverprofiles never span anywhere near this, so skipping such a
+            // block cannot affect a legitimate file's coverage.
+            guard block.endLine - block.startLine < maxGoBlockSpan else { continue }
             var entry = perFile[block.path] ?? (instrumented: [], covered: [])
             for number in block.startLine...block.endLine {
                 entry.instrumented.insert(number)

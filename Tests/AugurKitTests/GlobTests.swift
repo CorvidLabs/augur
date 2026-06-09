@@ -55,6 +55,65 @@ final class GlobTests: XCTestCase {
         XCTAssertFalse(pattern.matches("src/node_modules_helper.js"))
     }
 
+    // MARK: - Sibling anchoring (regression: dir/** must not leak onto siblings)
+
+    func testDirectoryGlobDoesNotMatchSiblingPrefixes() {
+        // `vendor/**` must match the directory and its contents, but never a
+        // sibling path that merely shares the `vendor` prefix.
+        let pattern = GlobPattern("vendor/**")
+        XCTAssertTrue(pattern.matches("vendor"))
+        XCTAssertTrue(pattern.matches("vendor/x"))
+        XCTAssertTrue(pattern.matches("vendor/a/b"))
+        XCTAssertFalse(pattern.matches("vendors/x"))
+        XCTAssertFalse(pattern.matches("vendorize.go"))
+        XCTAssertFalse(pattern.matches("vendor-old/y"))
+    }
+
+    func testDocsGlobDoesNotMatchSiblingPrefixes() {
+        let pattern = GlobPattern("docs/**")
+        XCTAssertTrue(pattern.matches("docs"))
+        XCTAssertTrue(pattern.matches("docs/guide.md"))
+        XCTAssertTrue(pattern.matches("docs/a/b/x.md"))
+        XCTAssertFalse(pattern.matches("docs-internal/secret.md"))
+        XCTAssertFalse(pattern.matches("docsite/x.md"))
+    }
+
+    func testSrcGlobDoesNotMatchSiblingPrefixes() {
+        let pattern = GlobPattern("src/**")
+        XCTAssertTrue(pattern.matches("src"))
+        XCTAssertTrue(pattern.matches("src/main.go"))
+        XCTAssertTrue(pattern.matches("src/deep/main.go"))
+        XCTAssertFalse(pattern.matches("srcgen/a.go"))
+        XCTAssertFalse(pattern.matches("src-old/a.go"))
+    }
+
+    func testLeadingDoubleStarDoesNotMatchMidSegment() {
+        // `**/foo` is anchored at a `/` boundary, so `barfoo` must not match.
+        let pattern = GlobPattern("**/foo")
+        XCTAssertTrue(pattern.matches("foo"))
+        XCTAssertTrue(pattern.matches("a/foo"))
+        XCTAssertTrue(pattern.matches("a/b/foo"))
+        XCTAssertFalse(pattern.matches("barfoo"))
+        XCTAssertFalse(pattern.matches("a/barfoo"))
+    }
+
+    func testMiddleDoubleStarMatchesZeroOrMoreSegments() {
+        let pattern = GlobPattern("a/**/b")
+        XCTAssertTrue(pattern.matches("a/b"))
+        XCTAssertTrue(pattern.matches("a/x/b"))
+        XCTAssertTrue(pattern.matches("a/x/y/b"))
+        XCTAssertFalse(pattern.matches("ab"))
+        XCTAssertFalse(pattern.matches("a/bc"))
+        XCTAssertFalse(pattern.matches("ax/b"))
+    }
+
+    func testBareDoubleStarStillMatchesEverything() {
+        let pattern = GlobPattern("**")
+        XCTAssertTrue(pattern.matches("x"))
+        XCTAssertTrue(pattern.matches("a/b/c"))
+        XCTAssertTrue(pattern.matches(""))
+    }
+
     // MARK: - Question mark
 
     func testQuestionMarkSingleCharacter() {
