@@ -1,0 +1,31 @@
+---
+interface Props {
+  kind: 'proceed' | 'review' | 'block'
+  score?: number
+}
+const { kind, score } = Astro.props
+const labels = { proceed: 'PROCEED', review: 'REVIEW', block: 'BLOCK' } as const
+const glyphs = { proceed: '✓', review: '!', block: '✕' } as const
+---
+<span class={`verdict verdict-${kind}`}>
+  <span class="verdict-glyph" aria-hidden="true">{glyphs[kind]}</span>
+  <span class="verdict-label">{labels[kind]}</span>
+  {typeof score === 'number' && <span class="verdict-score">{score}/100</span>}
+</span>
+
+<style is:global>
+  .verdict {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border-radius: 7px;
+    font-family: var(--mono); font-size: 0.8125rem; font-weight: 700;
+    letter-spacing: 0.06em; border: 1px solid transparent;
+  }
+  .verdict-glyph { font-weight: 800; }
+  .verdict-score { font-weight: 500; opacity: 0.85; letter-spacing: 0; }
+  .verdict-proceed { background: var(--proceed-muted); color: var(--proceed);
+    border-color: rgba(52, 211, 153, 0.3); }
+  .verdict-review { background: var(--review-muted); color: var(--review);
+    border-color: rgba(251, 191, 36, 0.3); }
+  .verdict-block { background: var(--block-muted); color: var(--block);
+    border-color: rgba(248, 113, 113, 0.3); }
+</style>

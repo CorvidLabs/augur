@@ -1,0 +1,66 @@
+name: Deploy Site
+
+# Builds the Astro marketing + docs site under site/ and deploys it to GitHub Pages.
+#
+# Honest caveat — private repo: serving GitHub Pages from a PRIVATE repository to a
+# public URL requires GitHub Pro / Team / Enterprise. While CorvidLabs/augur is private
+# without a paid plan, the deploy job will not publish. This workflow is marketing PREP:
+# everything builds and is ready, so publishing "just works" once the repo is made public
+# (or a paid plan is enabled). Pages must be enabled once in the repo settings
+# (Settings → Pages → Source: GitHub Actions); this workflow does not enable it.
+#
+# Runner choice: this mirrors CorvidLabs/spec-sync's Pages workflow, which uses
+# ubuntu-latest. The site is a build-only static job (Bun + Astro, no Swift toolchain
+# needed), so ubuntu is appropriate and keeps the self-hosted macOS runners free for the
+# Swift build/test/gate workflows. (augur's own CI gate runs on [self-hosted, macOS].)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build Astro Site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: site
+        run: bun install --frozen-lockfile
+
+      - name: Build site
+        working-directory: site
+        run: bun run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
