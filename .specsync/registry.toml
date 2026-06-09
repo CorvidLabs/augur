@@ -1,0 +1,5 @@
+[registry]
+name = "augur"
+
+[specs]
+change-confidence = "specs/change-confidence/change-confidence.spec.md"
