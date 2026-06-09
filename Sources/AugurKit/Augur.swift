@@ -19,7 +19,9 @@ public struct Augur: Sendable {
     /// Assess a scope. `now` is injectable for deterministic tests.
     /// - Parameters:
     ///   - scope: The diff scope to assess.
-    ///   - now: Reference time for recency signals.
+    ///   - now: Reference time injected at the CLI boundary so scoring stays
+    ///     deterministic in tests. No current signal scores elapsed time, so the
+    ///     value does not affect the verdict; it is reserved for time-based signals.
     ///   - coverage: An optional line-coverage report; when present it sharpens
     ///     the test-gap signal per changed line.
     ///   - filter: An optional `PathFilter`; changed files matching any of its
@@ -57,7 +59,9 @@ public struct Augur: Sendable {
     /// - Parameters:
     ///   - scope: The diff scope to assess.
     ///   - history: A snapshot, typically rebuilt from a `CalibrationCache`.
-    ///   - now: Reference time for recency signals.
+    ///   - now: Reference time injected at the CLI boundary so scoring stays
+    ///     deterministic in tests. No current signal scores elapsed time, so the
+    ///     value does not affect the verdict; it is reserved for time-based signals.
     ///   - coverage: An optional line-coverage report.
     ///   - filter: An optional `PathFilter`; matching files are dropped before
     ///     scoring and reported in `Assessment.excludedPaths`.

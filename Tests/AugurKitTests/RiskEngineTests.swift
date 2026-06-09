@@ -82,7 +82,8 @@ final class RiskEngineTests: XCTestCase {
     }
 
     func testNumstatParsing() {
-        let output = "12\t3\tsrc/a.swift\n-\t-\tassets/logo.png\n"
+        // NUL-delimited `git diff --numstat -z` records.
+        let output = "12\t3\tsrc/a.swift\0-\t-\tassets/logo.png\0"
         let files = GitRepository.parseNumstat(output)
         XCTAssertEqual(files.count, 2)
         XCTAssertEqual(files[0].linesAdded, 12)

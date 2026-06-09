@@ -219,7 +219,7 @@ struct Check: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit a GitHub-flavored markdown report (for PR comments / job summaries). Mutually exclusive with --json and --sarif.")
     var markdown = false
 
-    @Flag(name: .long, help: "Emit SARIF 2.1.0 (for GitHub code scanning). Mutually exclusive with --json.")
+    @Flag(name: .long, help: "Emit SARIF 2.1.0 (for GitHub code scanning). Mutually exclusive with --json and --markdown.")
     var sarif = false
 
     @Option(name: .long, help: "Write SARIF to this file instead of stdout (implies --sarif).")

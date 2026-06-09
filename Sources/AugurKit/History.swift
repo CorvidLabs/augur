@@ -99,6 +99,10 @@ public struct HistorySnapshot: Sendable {
 
     public func isIncidentProne(_ file: String) -> Bool { incidentFiles.contains(file) }
 
+    /// Days since `file` was last touched, relative to `now`, or `nil` if the file
+    /// has no history. Recency data is derived but no current signal scores it, so
+    /// this is exposed for callers and reserved for a future time-based signal; it
+    /// does not affect the verdict.
     public func daysSinceTouched(_ file: String, now: Int) -> Int? {
         guard let last = lastTouched[file] else { return nil }
         return max(0, (now - last) / 86_400)

@@ -12,5 +12,5 @@
 - Add: augur↔attest trust-pipeline demo, reusable CI workflow, pre-commit hook (#1) (676d076)
 - Add: per-line coverage ingestion + augur-gate composite action (3a28011)
 - Add: configurable .augur.toml rules + augur calibrate cache (ab2867d)
-- Add: augur — deterministic change-confidence & risk engine (31ee79b)
+- Add: augur - deterministic change-confidence & risk engine (31ee79b)
 

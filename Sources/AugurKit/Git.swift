@@ -55,7 +55,10 @@ public struct GitRepository: RepositoryProbe {
     }
 
     public func changedFiles(in scope: DiffScope) throws -> [ChangedFile] {
-        let numstat = try run(["diff", "--numstat"] + Self.scopeArgs(scope))
+        // `-z` yields NUL-delimited records and disables path quoting; it also
+        // splits renames into `added\tdeleted\t<NUL>oldpath<NUL>newpath` so we can
+        // resolve the synthetic `old => new` brace path to the real new path.
+        let numstat = try run(["diff", "--numstat", "-z"] + Self.scopeArgs(scope))
         let files = Self.parseNumstat(numstat)
         // Best-effort: enrich with added line ranges for per-line coverage.
         let added = (try? addedLines(in: scope)) ?? [:]
@@ -86,7 +89,7 @@ public struct GitRepository: RepositoryProbe {
     }
 
     public func recentCommits(limit: Int) throws -> [Commit] {
-        // One log call powers churn, recency, ownership, coupling, and incidents.
+        // One log call powers churn, ownership, coupling, and incidents.
         // Field separator: US (0x1f); record separator: a leading "\u{1e}".
         let format = "\u{1e}%H\u{1f}%ae\u{1f}%ct\u{1f}%s"
         let args = ["log", "-n", String(limit), "--no-merges", "--pretty=format:\(format)", "--name-only"]
@@ -101,14 +104,37 @@ public struct GitRepository: RepositoryProbe {
 
     // MARK: - Parsing
 
+    /// Parses the NUL-delimited output of `git diff --numstat -z`.
+    ///
+    /// Tokens are split on NUL (`\0`). A normal record is one token of the form
+    /// `added\tdeleted\t<path>`. A rename/copy record has an empty trailing path
+    /// in its first token (`added\tdeleted\t`) and is followed by two further
+    /// tokens: the old path then the new path. The new path is always used, so a
+    /// rename resolves to its real destination rather than the synthetic
+    /// `{old => new}` brace string git prints in non-`-z` mode. `-` line counts
+    /// mark binary files.
     static func parseNumstat(_ output: String) -> [ChangedFile] {
         var files: [ChangedFile] = []
-        for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
-            let parts = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+        let tokens = output.split(separator: "\0", omittingEmptySubsequences: false).map(String.init)
+        var index = 0
+        while index < tokens.count {
+            let token = tokens[index]
+            index += 1
+            // A record token has two tabs: `added\tdeleted\t<path-or-empty>`.
+            let parts = token.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
             guard parts.count == 3 else { continue }
             let addedField = String(parts[0])
             let deletedField = String(parts[1])
-            let path = String(parts[2])
+            var path = String(parts[2])
+            // Rename/copy: the path is empty here; old and new paths follow as
+            // two separate NUL-delimited tokens. Resolve to the new path.
+            if path.isEmpty {
+                guard index + 1 < tokens.count else { continue }
+                // tokens[index] is the old path; tokens[index + 1] is the new path.
+                path = tokens[index + 1]
+                index += 2
+            }
+            guard !path.isEmpty else { continue }
             let isBinary = addedField == "-" || deletedField == "-"
             files.append(
                 ChangedFile(
@@ -194,7 +220,11 @@ public struct GitRepository: RepositoryProbe {
     private func run(_ arguments: [String], allowFailure: Bool = false) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", path] + arguments
+        // `core.quotepath=false` makes git emit verbatim UTF-8 paths instead of
+        // octal-escaping non-ASCII bytes (e.g. `caf\303\251.go`), so CODEOWNERS,
+        // exclude, and coverage matching see the real path. (`--numstat -z` also
+        // disables quoting on its own; this covers every other git call.)
+        process.arguments = ["git", "-C", path, "-c", "core.quotepath=false"] + arguments
         let stdout = Pipe()
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice  // avoid pipe-buffer deadlock

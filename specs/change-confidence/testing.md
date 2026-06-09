@@ -3,7 +3,9 @@
 ## Strategy
 
 The engine is tested through an in-memory `FixtureProbe` conforming to `RepositoryProbe`,
-so scoring is verified without invoking `git`. `now` is injected for deterministic recency.
+so scoring is verified without invoking `git`. `now` is injected for determinism; no signal
+currently scores elapsed time. The real `GitRepository` is additionally exercised by on-disk
+integration tests (`GitRepositoryIntegrationTests`) against a temporary repository.
 
 ## Coverage (Tests/AugurKitTests/RiskEngineTests.swift)
 
@@ -14,7 +16,7 @@ so scoring is verified without invoking `git`. `now` is injected for determinist
 | `testTestAlongsideLowersRisk` | Touching a test file strictly lowers the source file's risk. |
 | `testCalibrationConfidenceGrowsWithHistory` | Confidence `< 0.25` with thin history, `> 0.6` with deep history. |
 | `testIncidentHistoryRaisesRiskOnlyWhenCalibrated` | Revert-prone file raises `incident`; calibration `> 0.5`. |
-| `testNumstatParsing` | `git diff --numstat` parsing, including binary (`-`) files. |
+| `testNumstatParsing` | `git diff --numstat -z` (NUL-delimited) parsing, including binary (`-`) files. |
 | `testLogParsing` | Single-pass log parsing and incident-subject detection. |
 | `testDefaultThresholdsMatchOriginalBehavior` | `Thresholds.default` is `35`/`65`; `Verdict.from(riskScore:thresholds: .default)` equals the convenience overload at the `35`/`65` boundaries. |
 | `testCustomThresholdsChangeVerdict` | Tightening thresholds escalates the verdict without changing the `riskScore`; `Assessment.thresholds` reflects the config. |
