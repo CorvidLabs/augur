@@ -45,7 +45,8 @@ public struct RiskEngine: Sendable {
         scope: DiffScope,
         changedFiles: [ChangedFile],
         history: HistorySnapshot,
-        now: Int
+        now: Int,
+        coverage: CoverageReport? = nil
     ) -> Assessment {
         let calibration = Calibration(
             confidence: Self.calibrationConfidence(totalCommits: history.totalCommits, incidentCommits: history.incidentCommits),
@@ -63,6 +64,7 @@ public struct RiskEngine: Sendable {
                 changedPaths: changedPaths,
                 touchedTests: touchedTests,
                 calibration: calibration,
+                coverage: coverage,
                 now: now
             )
         }
@@ -92,6 +94,7 @@ public struct RiskEngine: Sendable {
         changedPaths: Set<String>,
         touchedTests: Bool,
         calibration: Calibration,
+        coverage: CoverageReport?,
         now: Int
     ) -> FileAssessment {
         var signals: [Signal] = []
@@ -103,12 +106,16 @@ public struct RiskEngine: Sendable {
             signals.append(Signal(name: "sensitivity", risk: 0, weight: weights.sensitivity, detail: "no sensitive paths"))
         }
 
-        // Test gap: non-test code changed but no test touched anywhere in the change.
+        // Test gap. When a coverage report is supplied, the signal becomes precise
+        // for non-test code files: it scores the uncovered fraction of the change's
+        // instrumented added lines. Without coverage, the original heuristic applies.
         let isTest = TestHeuristics.isTestFile(file.path)
         if isTest {
             signals.append(Signal(name: "test-gap", risk: 0, weight: weights.testGap, detail: "file is a test"))
         } else if file.isBinary {
             signals.append(Signal(name: "test-gap", risk: 0.1, weight: weights.testGap, detail: "binary asset, not unit-testable"))
+        } else if let coverage, let signal = Self.coverageTestGap(file: file, coverage: coverage, weight: weights.testGap) {
+            signals.append(signal)
         } else if touchedTests {
             signals.append(Signal(name: "test-gap", risk: 0.15, weight: weights.testGap, detail: "tests changed alongside"))
         } else {
@@ -153,6 +160,43 @@ public struct RiskEngine: Sendable {
 
         let score = Self.weightedScore(signals)
         return FileAssessment(path: file.path, riskScore: score, signals: signals)
+    }
+
+    // MARK: - Coverage test-gap
+
+    /// The coverage-derived test-gap signal for a non-test, non-binary code file,
+    /// or `nil` when coverage can't refine it (so the heuristic should apply).
+    ///
+    /// Behavior:
+    ///  - File absent from the report → high risk (`0.7`), "not in coverage report".
+    ///  - File present with instrumented changed lines →
+    ///    `risk = 1 - (covered / instrumented)`.
+    ///  - File present but no changed line was instrumented, or no added lines are
+    ///    known → `nil` (fall back to heuristic).
+    static func coverageTestGap(file: ChangedFile, coverage: CoverageReport, weight: Double) -> Signal? {
+        // Without per-line data we cannot be precise; let the heuristic decide.
+        guard !file.addedLines.isEmpty else {
+            // The file may still be entirely absent from coverage (uncovered).
+            if coverage.matchFile(diffPath: file.path) == nil {
+                return Signal(name: "test-gap", risk: 0.7, weight: weight, detail: "not in coverage report")
+            }
+            return nil
+        }
+        let result = coverage.query(path: file.path, changedLines: file.addedLines)
+        guard result.fileMatched else {
+            return Signal(name: "test-gap", risk: 0.7, weight: weight, detail: "not in coverage report")
+        }
+        guard let fraction = result.coveredFraction else {
+            // Matched, but no changed line was instrumented — nothing to measure.
+            return nil
+        }
+        let percent = Int((fraction * 100).rounded())
+        return Signal(
+            name: "test-gap",
+            risk: 1 - fraction,
+            weight: weight,
+            detail: "\(result.covered)/\(result.instrumented) changed lines covered (\(percent)%)"
+        )
     }
 
     // MARK: - Math

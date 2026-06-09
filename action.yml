@@ -1,0 +1,45 @@
+name: "augur gate"
+description: >-
+  Build augur from this checkout and gate the change: exit non-zero when the
+  risk verdict meets or exceeds a threshold. Deterministic, no API key.
+author: "CorvidLabs"
+
+inputs:
+  range:
+    description: "Git range to assess (e.g. origin/main..HEAD)."
+    required: false
+    default: "origin/main..HEAD"
+  threshold:
+    description: "Verdict at or above which to fail: proceed, review, or block."
+    required: false
+    default: "block"
+  coverage:
+    description: "Optional path to an LCOV (.info) or Cobertura (.xml) coverage report."
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run augur in (repository root)."
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build augur (release)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: swift build -c release
+
+    - name: Run augur gate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        args=(gate --range "${{ inputs.range }}" --threshold "${{ inputs.threshold }}")
+        if [ -n "${{ inputs.coverage }}" ]; then
+          args+=(--coverage "${{ inputs.coverage }}")
+        fi
+        .build/release/augur "${args[@]}"
+
+branding:
+  icon: "eye"
+  color: "purple"

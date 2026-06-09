@@ -10,4 +10,9 @@ jobs:
       - run: swift build
       - run: swift test
       - run: fledge spec check
-      - run: swift run augur gate --range HEAD~1..HEAD --threshold block || true  # dogfood (non-fatal)
+      - name: Dogfood — augur gates its own latest commit (non-fatal)
+        run: |
+          # Print the verdict, then gate; non-fatal so first-commit / edge cases
+          # don't redden CI while still surfacing the result.
+          swift run augur check --range HEAD~1..HEAD || true
+          swift run augur gate --range HEAD~1..HEAD --threshold block || true

@@ -8,6 +8,10 @@
 /// shelling out to git.
 public protocol RepositoryProbe: Sendable {
     /// Files touched in the given scope.
+    ///
+    /// Implementations should populate `ChangedFile.addedLines` when they can, so
+    /// per-line coverage scoring is available; the default protocol path leaves it
+    /// empty (heuristic test-gap).
     func changedFiles(in scope: DiffScope) throws -> [ChangedFile]
 
     /// Recent commits (newest first), the basis for all history-derived signals.
@@ -15,12 +19,21 @@ public protocol RepositoryProbe: Sendable {
 
     /// The current `HEAD` commit SHA, used to pin and detect stale calibration caches.
     func headSHA() throws -> String
+
+    /// The added (new-revision) line numbers per file path in the scope.
+    ///
+    /// Used to refine the test-gap signal against a coverage report. The default
+    /// returns `[:]`, so in-memory fixtures need not implement it.
+    func addedLines(in scope: DiffScope) throws -> [String: [Int]]
 }
 
 extension RepositoryProbe {
     /// Default: probes without a real repository (e.g. test fixtures) report an
     /// empty SHA, which callers treat as "unknown HEAD".
     public func headSHA() throws -> String { "" }
+
+    /// Default: no per-line information available.
+    public func addedLines(in scope: DiffScope) throws -> [String: [Int]] { [:] }
 }
 
 // MARK: - Git Implementation
@@ -42,14 +55,34 @@ public struct GitRepository: RepositoryProbe {
     }
 
     public func changedFiles(in scope: DiffScope) throws -> [ChangedFile] {
-        var args = ["diff", "--numstat"]
-        switch scope {
-        case .range(let range): args.append(range)
-        case .staged: args.append("--cached")
-        case .workingTree: args.append("HEAD")
+        let numstat = try run(["diff", "--numstat"] + Self.scopeArgs(scope))
+        let files = Self.parseNumstat(numstat)
+        // Best-effort: enrich with added line ranges for per-line coverage.
+        let added = (try? addedLines(in: scope)) ?? [:]
+        guard !added.isEmpty else { return files }
+        return files.map { file in
+            ChangedFile(
+                path: file.path,
+                linesAdded: file.linesAdded,
+                linesDeleted: file.linesDeleted,
+                isBinary: file.isBinary,
+                addedLines: added[file.path] ?? []
+            )
         }
-        let output = try run(args)
-        return Self.parseNumstat(output)
+    }
+
+    public func addedLines(in scope: DiffScope) throws -> [String: [Int]] {
+        let output = try run(["diff", "--unified=0", "--no-color"] + Self.scopeArgs(scope), allowFailure: true)
+        return Self.parseUnifiedZeroAddedLines(output)
+    }
+
+    /// Maps a `DiffScope` to its `git diff` argument(s).
+    static func scopeArgs(_ scope: DiffScope) -> [String] {
+        switch scope {
+        case .range(let range): return [range]
+        case .staged: return ["--cached"]
+        case .workingTree: return ["HEAD"]
+        }
     }
 
     public func recentCommits(limit: Int) throws -> [Commit] {
@@ -87,6 +120,49 @@ public struct GitRepository: RepositoryProbe {
             )
         }
         return files
+    }
+
+    /// Parses `git diff --unified=0` into the added (new-revision) line numbers
+    /// per file.
+    ///
+    /// Tracks the current file via `+++ b/<path>` headers and reads hunk headers
+    /// `@@ -a,b +c,d @@`: added lines span `c ..< c + d` (with `d` defaulting to
+    /// `1` when omitted, and contributing none when `d == 0`).
+    static func parseUnifiedZeroAddedLines(_ output: String) -> [String: [Int]] {
+        var result: [String: [Int]] = [:]
+        var currentPath: String?
+        for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+            if line.hasPrefix("+++ ") {
+                currentPath = normalizeDiffHeaderPath(String(line.dropFirst(4)))
+            } else if line.hasPrefix("@@") {
+                guard let path = currentPath, let (start, count) = parseHunkAddedRange(line) else { continue }
+                guard count > 0 else { continue }
+                result[path, default: []].append(contentsOf: start..<(start + count))
+            }
+        }
+        return result
+    }
+
+    /// Extracts the new-side `(start, count)` from a hunk header `@@ -a,b +c,d @@`.
+    static func parseHunkAddedRange(_ header: String) -> (start: Int, count: Int)? {
+        // Find the "+c,d" token between the first "+" after "@@" and the next space.
+        guard let plusIndex = header.firstIndex(of: "+") else { return nil }
+        let afterPlus = header[header.index(after: plusIndex)...]
+        let token = afterPlus.prefix { $0 != " " && $0 != "@" }
+        let parts = token.split(separator: ",", omittingEmptySubsequences: false)
+        guard let start = Int(parts[0]) else { return nil }
+        let count = parts.count > 1 ? (Int(parts[1]) ?? 1) : 1
+        return (start, count)
+    }
+
+    /// Strips the `b/` (or `a/`) prefix git puts on diff header paths; returns
+    /// `nil`-safe `/dev/null` as an empty path the caller ignores.
+    static func normalizeDiffHeaderPath(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        if trimmed == "/dev/null" { return nil }
+        if trimmed.hasPrefix("b/") || trimmed.hasPrefix("a/") { return String(trimmed.dropFirst(2)) }
+        return trimmed
     }
 
     static func parseLog(_ output: String) -> [Commit] {

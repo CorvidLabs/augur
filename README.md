@@ -43,7 +43,7 @@ Every signal is derived from `git` history and the filesystem — no model, no n
 | Signal | What it catches |
 |--------|-----------------|
 | **sensitivity** | Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests. |
-| **test-gap** | Code changed with no test in the changeset. |
+| **test-gap** | Code changed with no test in the changeset — *or*, with a coverage report, the fraction of changed lines left uncovered. |
 | **churn** | Hot files that change constantly are fragile. |
 | **coupling** | A file's usual co-change partner is *absent* from the change. |
 | **diff-shape** | Large single-file edits are harder to review. |
@@ -87,7 +87,45 @@ augur check --cached                # reuse the cache instead of re-walking git 
 
 augur check --config ./my.toml      # use an explicit .augur.toml
 augur check --no-config             # ignore any .augur.toml; use built-in defaults
+
+augur check --coverage lcov.info    # sharpen test-gap with a coverage report
+augur check --no-coverage           # disable coverage auto-detection
 ```
+
+### Coverage-aware test-gap (`--coverage`)
+
+By default the **test-gap** signal is a coarse heuristic: did the changeset touch any
+test file? Supply a line-coverage report and it becomes precise — it scores the fraction
+of the change's *added* lines that are actually covered:
+
+```sh
+augur check --coverage lcov.info      # LCOV
+augur check --coverage coverage.xml   # Cobertura XML
+```
+
+augur also **auto-detects** `lcov.info` or `coverage.xml` at the repo root when `--coverage`
+is absent; pass `--no-coverage` to disable that, or `--coverage <path>` to point elsewhere.
+The format is detected by extension (`.info` → LCOV, `.xml` → Cobertura) then by content.
+
+Precise behavior, per non-test, non-binary code file:
+
+- **Has instrumented changed lines** → `risk = 1 − (covered ÷ instrumented)`, with a detail
+  like `2/3 changed lines covered (67%)`.
+- **Entirely absent from the report** → high risk (`0.7`, "not in coverage report").
+- **No changed line was instrumented** (e.g. only comments/blank lines changed), or no
+  per-line data is available → falls back to the heuristic.
+- **No coverage supplied at all** → the original heuristic test-gap behavior, unchanged.
+
+Added line ranges come from `git diff --unified=0`; only the file's *added* lines are scored
+(not context or deletions).
+
+**Path-matching limitation.** Diff paths and coverage paths often disagree on a leading
+prefix (`Sources/App/Service.swift` vs `/build/checkout/Sources/App/Service.swift`), so
+augur matches by **normalized longest common suffix** at path-component boundaries. This
+tolerates prefix differences, but if two distinct files share an identical trailing suffix
+(`a/util.swift` and `b/util.swift` against a bare `util.swift`) the match is ambiguous and
+resolved deterministically (shorter then lexicographically-smaller path) — it may not be the
+file you intended. Prefer emitting coverage with repo-relative paths.
 
 ### Configuration (`.augur.toml`)
 
@@ -141,6 +179,39 @@ augur check --cached      # fast path; warns on stderr if stale
 - run: augur gate --range origin/main..HEAD --threshold block
 ```
 
+#### Composite action (`action.yml`)
+
+This repo ships a composite GitHub Action ("augur gate") that builds augur from the
+checked-out source and runs `augur gate`. It targets CorvidLabs' **self-hosted macOS ARM64**
+runners. Use it from augur's *own* workflow to self-gate:
+
+```yaml
+jobs:
+  gate:
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # gate needs history for the range
+      - uses: ./
+        with:
+          range: origin/main..HEAD
+          threshold: block
+          coverage: lcov.info        # optional
+          working-directory: .       # optional
+```
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `range` | `origin/main..HEAD` | Git range to assess. |
+| `threshold` | `block` | Fail at or above this verdict (`proceed` / `review` / `block`). |
+| `coverage` | *(none)* | Optional path to an LCOV `.info` or Cobertura `.xml` report. |
+| `working-directory` | `.` | Repository root to run in. |
+
+**Deliberately deferred:** this action builds augur from *its own checkout*, which is correct
+for augur self-gating its CI. Reusing it from *other* repos (installing a published augur
+binary rather than rebuilding the action's checkout) is a later step and is **not** wired up
+yet — don't add `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
+
 ### For agents
 
 ```sh
@@ -180,7 +251,8 @@ The engine (`AugurKit`) has **zero third-party dependencies** and is fully testa
 
 - [x] `augur calibrate` — cache the history model; report backing volume (`check --cached`).
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
-- [ ] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision.
+- [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
+- [x] Composite `action.yml` ("augur gate") for self-hosted macOS self-gating.
 - **`attest`** — signed provenance records keyed to commit SHAs: a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
   `attest` records that trust.
