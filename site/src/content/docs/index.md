@@ -64,4 +64,5 @@ backs it. Every assessment reports `calibration` (`prior-only` → `weak` →
 | [Quickstart](quickstart.md) — install and first verdict | [Signals](signals.md) — every signal, weight, and tuning knob |
 | [CLI reference](cli.md) — every command and flag | [Configuration](configuration.md) — the full `.augur.toml` reference |
 | [Architecture](architecture.md) — `AugurKit` vs the CLI, the pipeline | [Coverage](coverage.md) — LCOV / Cobertura / JaCoCo / Go |
-| [CI integration](ci-integration.md) — gate, SARIF, pre-commit, attest | [View on GitHub](https://github.com/CorvidLabs/augur) |
+| [CI integration](ci-integration.md) — gate, SARIF, pre-commit, attest | [Dogfooding](dogfooding.md) — augur scores augur (real captured proof) |
+| [View on GitHub](https://github.com/CorvidLabs/augur) | |

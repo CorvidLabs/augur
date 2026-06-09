@@ -471,6 +471,22 @@ In-depth docs live in [`docs/`](docs/):
 - [CLI reference](docs/cli.md) — every command and flag (`check`, `gate`, `calibrate`, `explain`) with examples, glob syntax, exit codes, and JSON shape.
 - [Coverage](docs/coverage.md) — supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats.
 - [CI integration](docs/ci-integration.md) — self-hosted macOS, the `augur-gate` action, SARIF upload (GHAS caveat), the pre-commit hook, and the augur → attest trust pipeline.
+- [Dogfooding](docs/dogfooding.md) — **proof:** augur scores augur, with real captured output for a PROCEED on its own change *and* a caught risky change (non-zero gate), plus an honest note on calibration.
+
+## Dogfooding (proof)
+
+augur runs augur on its own changes. The release binary assesses every change in
+CI and gates on a block-level self-change, and [`examples/dogfood.sh`](examples/dogfood.sh)
+is a committed, runnable demo that proves **both** outcomes with real exit codes:
+a low-risk **PROCEED** on augur's own latest change, and a **REVIEW** verdict
+(with a `sensitivity: secrets` signal and a genuinely non-zero `gate` exit) on a
+controlled risky change. The captured output and an honest note on augur's own
+`prior-only` calibration are in [docs/dogfooding.md](docs/dogfooding.md).
+
+```sh
+fledge run dogfood          # build release + assess & gate augur's last commit
+./examples/dogfood.sh       # the full PROCEED + caught-risky-change proof
+```
 
 ## Roadmap
 
