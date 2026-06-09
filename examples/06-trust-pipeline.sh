@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 06-trust-pipeline.sh — the end-to-end augur -> attest trust loop.
+# 06-trust-pipeline.sh: the end-to-end augur -> attest trust loop.
 #
 # augur scores the risk of a change (proceed / review / block); attest records
 # that verdict as a portable, signed-or-unsigned provenance note keyed to the
@@ -10,12 +10,13 @@
 #
 # This demo proves the loop with REAL exit codes against a throwaway /tmp repo:
 #   1. build augur (this repo) and attest (../attest),
-#   2. create a scratch repo whose HEAD touches a sensitive `auth` file,
+#   2. create a scratch repo whose HEAD makes a large, untested change to a
+#      sensitive credentials file (so augur scores it 'review'),
 #   3. run `augur gate` and show the verdict + exit code,
 #   4. pipe `augur check --json` into `attest sign --from-augur -` as an agent,
 #   5. `attest log` the recorded provenance,
-#   6. `attest verify` a policy that demands human approval for review+ verdicts
-#      — it FAILs (exit 1) on the agent-only record, then PASSes (exit 0) once a
+#   6. `attest verify` a policy that demands human approval for review+ verdicts.
+#      It FAILs (exit 1) on the agent-only record, then PASSes (exit 0) once a
 #      human-approved attestation is added to the commit.
 #
 # attest is a sibling tool at ../attest. If that checkout is absent this script
@@ -47,14 +48,29 @@ git -C "$REPO" add -A
 git -C "$REPO" commit -qm "init"
 BASE="$(git -C "$REPO" rev-parse HEAD)"
 
-echo "func mintToken() {}" > "$REPO/src/auth/token.swift"
+# A substantial change to a sensitive credentials file, committed with no test
+# alongside it. augur blends the sensitive path, the change size, and the
+# missing test into a 'review' verdict (not 'proceed'), which is exactly what
+# trips the human-approval gate in step 5.
+{
+    echo "// Credential and token rotation for the auth subsystem."
+    echo "import Foundation"
+    echo
+    echo "public struct Credentials {"
+    for i in $(seq 1 120); do
+        echo "    public func rotateSecret$i(token: String, password: String) -> String {"
+        echo "        token + \"-\" + password + \"-$i\""
+        echo "    }"
+    done
+    echo "}"
+} > "$REPO/src/auth/credentials.swift"
 git -C "$REPO" add -A
-git -C "$REPO" commit -qm "feat: add auth token handling"
+git -C "$REPO" commit -qm "feat: add credential rotation to the auth subsystem"
 HEAD="$(git -C "$REPO" rev-parse HEAD)"
 RANGE="$BASE..$HEAD"
 
 echo "== 1) the change under review =="
-echo "  range: $RANGE  (HEAD touches a sensitive auth path)"
+echo "  range: $RANGE  (HEAD makes a large, untested change to a credentials file)"
 echo
 
 # --- 2. augur gate: print the verdict and the exit code ----------------------
@@ -68,7 +84,7 @@ run_gate() {
     echo "  gate --threshold $threshold -> exit $code"
     echo
 }
-run_gate block    # auth-only change scores 'review' -> passes a block gate
+run_gate block    # a 'review' change passes a block gate (review < block)
 run_gate review   # ...but a 'review' gate trips, so an agent must escalate
 
 # --- 3. record the verdict as provenance: augur check --json | attest sign ---
@@ -107,7 +123,7 @@ echo "  attest verify -> exit $FAIL_CODE   (only an agent attested a 'review' ch
 echo
 
 # --- 6. add a human-approved attestation, then verify PASSES -----------------
-# Any human-approved attestation on the commit clears the rule — the human need
+# Any human-approved attestation on the commit clears the rule. The human need
 # not restate the verdict; recording the sign-off is enough.
 echo "== 6) a human signs off, then attest verify PASSES =="
 "$ATTEST" sign -C "$REPO" \
@@ -128,7 +144,7 @@ echo "  attest verify -> exit $PASS_CODE   (human approval now satisfies the pol
 echo
 
 echo "== summary =="
-echo "  agent-only verify : exit $FAIL_CODE  (FAIL — escalate to a human)"
-echo "  after human sign  : exit $PASS_CODE  (PASS — trust policy satisfied)"
+echo "  agent-only verify : exit $FAIL_CODE  (FAIL, escalate to a human)"
+echo "  after human sign  : exit $PASS_CODE  (PASS, trust policy satisfied)"
 echo
 echo "augur scored the risk; attest recorded the trust and gated on it."
