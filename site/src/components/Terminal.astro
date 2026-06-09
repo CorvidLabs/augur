@@ -40,6 +40,19 @@ const { title = 'terminal', ariaLabel = 'Terminal example' } = Astro.props
   .term-good { color: var(--proceed); }
   .term-review { color: var(--review); }
   .term-block { color: var(--block); }
+  .term-good-b { color: var(--proceed); font-weight: 700; }
+  .term-review-b { color: var(--review); font-weight: 700; }
+  .term-block-b { color: var(--block); font-weight: 700; }
+  /* Mirrors the CLI's semantic ANSI scheme. */
+  .term-path { color: var(--term-cyan); }       /* cyan file paths */
+  .term-conf { color: var(--term-cyan); }        /* cyan confidence / calibration band */
+  .term-label { color: var(--text); font-weight: 700; } /* bold headers/labels */
+  .term-dim { color: var(--text-dim); }          /* dim secondary text */
+  /* The █/░ risk meter, tinted by verdict level (filled) vs dim (empty track). */
+  .meter-fill-proceed { color: var(--proceed); }
+  .meter-fill-review { color: var(--review); }
+  .meter-fill-block { color: var(--block); font-weight: 700; }
+  .meter-track { color: var(--text-dim); }
   .term-comment { color: var(--text-dim); font-style: italic; }
   .blink { display: inline-block; width: 8px; height: 16px;
     background: var(--accent-bright); vertical-align: middle; margin-left: 2px; }

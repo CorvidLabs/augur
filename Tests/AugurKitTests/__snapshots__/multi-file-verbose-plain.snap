@@ -1,0 +1,19 @@
+augur · main..HEAD
+
+  verdict     [!] REVIEW
+  risk        [############        ]  58/100
+  confidence  42/100
+  calibration history-backed (22 incidents / 320 commits)
+
+  files (3), riskiest first:
+    x    82  Sources/Auth/TokenStore.swift
+          · sensitivity: matches auth path
+          · test-gap: no tests changed
+          · churn: 160 lines changed
+    !    48  Sources/Core/Engine.swift
+          · churn: 190 lines changed
+          · coupling: co-changes with 4 files
+    ·    14  Sources/Core/Formatter.swift
+          · churn: 24 lines changed
+
+  → an agent should request human review before merging
