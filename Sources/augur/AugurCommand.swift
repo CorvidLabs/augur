@@ -12,13 +12,31 @@ struct AugurCommand: AsyncParsableCommand {
         test gaps, sensitive paths, ownership, and the repo's own revert history) and \
         returns a verdict: proceed, review, or block. No API key or LLM required.
         """,
-        version: "0.1.0",
-        subcommands: [Check.self, Gate.self, Explain.self],
+        version: "0.2.0",
+        subcommands: [Check.self, Gate.self, Calibrate.self, Explain.self],
         defaultSubcommand: Check.self
     )
 }
 
 // MARK: - Shared options
+
+struct ConfigOptions: ParsableArguments {
+    @Option(name: .long, help: "Path to an .augur.toml config (default: auto-discover at the repo root).")
+    var config: String?
+
+    @Flag(name: .long, help: "Ignore any .augur.toml and use built-in defaults.")
+    var noConfig = false
+
+    /// Resolves the engine from config, printing a one-line note to stderr when a
+    /// config file is applied so the effect is visible.
+    func resolvedEngine(repoPath: String) throws -> RiskEngine {
+        guard let resolved = try ConfigLoader.load(explicitPath: config, disabled: noConfig, repoPath: repoPath) else {
+            return RiskEngine()
+        }
+        Diagnostics.note("config: loaded \(resolved.source)")
+        return resolved.engine
+    }
+}
 
 struct ScopeOptions: ParsableArguments {
     @Option(name: .long, help: "A git range to assess, e.g. 'main..HEAD'.")
@@ -36,10 +54,11 @@ struct ScopeOptions: ParsableArguments {
         return .workingTree
     }
 
-    func makeAugur() throws -> (Augur, DiffScope) {
+    func makeAugur(config: ConfigOptions) throws -> (Augur, DiffScope) {
         let repo = GitRepository(path: path)
         try repo.validate()
-        return (Augur(probe: repo), resolvedScope())
+        let engine = try config.resolvedEngine(repoPath: path)
+        return (Augur(probe: repo, engine: engine), resolvedScope())
     }
 }
 
@@ -49,6 +68,7 @@ struct Check: AsyncParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Assess a change and print a risk verdict.")
 
     @OptionGroup var scope: ScopeOptions
+    @OptionGroup var configOptions: ConfigOptions
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -56,10 +76,13 @@ struct Check: AsyncParsableCommand {
     @Flag(name: [.long, .customShort("v")], help: "Show every contributing signal.")
     var verbose = false
 
+    @Flag(name: .long, help: "Reuse .augur/cache.json instead of re-walking git history.")
+    var cached = false
+
     func run() async throws {
-        let (augur, diffScope) = try scope.makeAugur()
+        let (augur, diffScope) = try scope.makeAugur(config: configOptions)
         do {
-            let assessment = try augur.assess(scope: diffScope)
+            let assessment = try assess(augur, scope: diffScope)
             if json {
                 print(try assessment.jsonString())
             } else {
@@ -69,6 +92,18 @@ struct Check: AsyncParsableCommand {
             if json { print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[]}") }
             else { print("augur · no changes to assess") }
         }
+    }
+
+    private func assess(_ augur: Augur, scope diffScope: DiffScope) throws -> Assessment {
+        guard cached else { return try augur.assess(scope: diffScope) }
+        guard let cache = CacheStore.load(repoPath: scope.path) else {
+            Diagnostics.note("no cache found at \(CacheStore.path(repoPath: scope.path)); computing live. Run `augur calibrate` first.")
+            return try augur.assess(scope: diffScope)
+        }
+        if let head = try? augur.currentHead(), !head.isEmpty, !cache.head.isEmpty, head != cache.head {
+            Diagnostics.note("cache is stale (calibrated at \(cache.head.prefix(8)), HEAD is \(head.prefix(8))); results may be outdated.")
+        }
+        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache))
     }
 }
 
@@ -80,6 +115,7 @@ struct Gate: AsyncParsableCommand {
     )
 
     @OptionGroup var scope: ScopeOptions
+    @OptionGroup var configOptions: ConfigOptions
 
     @Option(name: .long, help: "Threshold verdict: proceed, review, or block.")
     var threshold: String = "review"
@@ -91,7 +127,7 @@ struct Gate: AsyncParsableCommand {
         guard let limit = Verdict(rawValue: threshold) else {
             throw ValidationError("threshold must be one of: proceed, review, block")
         }
-        let (augur, diffScope) = try scope.makeAugur()
+        let (augur, diffScope) = try scope.makeAugur(config: configOptions)
         let assessment: Assessment
         do {
             assessment = try augur.assess(scope: diffScope)
@@ -106,6 +142,38 @@ struct Gate: AsyncParsableCommand {
     }
 }
 
+// MARK: - calibrate
+
+struct Calibrate: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Walk history once and cache the calibration model to .augur/cache.json for `check --cached`."
+    )
+
+    @Option(name: [.long, .customShort("C")], help: "Path to the repository.")
+    var path: String = "."
+
+    @Flag(name: .long, help: "Emit machine-readable JSON.")
+    var json = false
+
+    func run() async throws {
+        let repo = GitRepository(path: path)
+        try repo.validate()
+        let augur = Augur(probe: repo)
+        let cache = try augur.calibrate()
+        try CacheStore.save(cache, repoPath: path)
+
+        if json {
+            print(String(decoding: try cache.jsonData(), as: UTF8.self))
+            return
+        }
+        let head = cache.head.isEmpty ? "(unknown)" : String(cache.head.prefix(8))
+        print("augur calibrate · cached \(CacheStore.path(repoPath: path))")
+        print("  HEAD         \(head)")
+        print("  volume       \(cache.totalCommits) commits, \(cache.incidentCommits) incidents")
+        print("  calibration  \(cache.band) (confidence \(String(format: "%.2f", cache.confidence)))")
+    }
+}
+
 // MARK: - explain (optional AI, delegated to fledge)
 
 struct Explain: AsyncParsableCommand {
@@ -114,9 +182,10 @@ struct Explain: AsyncParsableCommand {
     )
 
     @OptionGroup var scope: ScopeOptions
+    @OptionGroup var configOptions: ConfigOptions
 
     func run() async throws {
-        let (augur, diffScope) = try scope.makeAugur()
+        let (augur, diffScope) = try scope.makeAugur(config: configOptions)
         let assessment = try augur.assess(scope: diffScope)
         let summary = Reporter.render(assessment, verbose: true)
 

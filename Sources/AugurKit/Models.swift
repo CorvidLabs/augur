@@ -105,13 +105,47 @@ public enum Verdict: String, Sendable, Codable, CaseIterable, Comparable {
         lhs.order < rhs.order
     }
 
-    /// Maps an overall risk score (0...100) to a verdict.
+    /// Maps an overall risk score (0...100) to a verdict using the default thresholds.
     public static func from(riskScore: Double) -> Verdict {
-        switch riskScore {
-        case ..<35: return .proceed
-        case ..<65: return .review
-        default: return .block
-        }
+        from(riskScore: riskScore, thresholds: .default)
+    }
+
+    /// Maps an overall risk score (0...100) to a verdict using explicit thresholds.
+    /// - Parameters:
+    ///   - riskScore: The blended risk score in `0...100`.
+    ///   - thresholds: The review/block cutoffs to apply.
+    /// - Returns: The recommended verdict.
+    public static func from(riskScore: Double, thresholds: Thresholds) -> Verdict {
+        if riskScore >= thresholds.block { return .block }
+        if riskScore >= thresholds.review { return .review }
+        return .proceed
+    }
+}
+
+// MARK: - Thresholds
+
+/// Configurable risk-score cutoffs that map a score (0...100) to a `Verdict`.
+///
+/// A score `>= block` blocks; `>= review` (but below `block`) requests review;
+/// anything lower proceeds. The defaults (`35` / `65`) match `augur`'s original
+/// hard-coded mapping, so omitting configuration is behavior-preserving.
+public struct Thresholds: Sendable, Equatable, Codable {
+    /// Scores at or above this require at least `review`.
+    public let review: Double
+    /// Scores at or above this `block`.
+    public let block: Double
+
+    /// The historical default cutoffs (`review: 35`, `block: 65`).
+    public static let `default` = Thresholds(review: 35, block: 65)
+
+    /// Creates a threshold pair. `review` is clamped to be no greater than `block`.
+    /// - Parameters:
+    ///   - review: The review cutoff (0...100).
+    ///   - block: The block cutoff (0...100).
+    public init(review: Double, block: Double) {
+        let safeBlock = max(0, min(100, block))
+        self.block = safeBlock
+        self.review = max(0, min(safeBlock, review))
     }
 }
 
@@ -132,7 +166,16 @@ public struct FileAssessment: Sendable, Equatable, Codable {
     /// Inverse of risk: how confident `augur` is that the file is safe (0...100).
     public var confidence: Double { 100 - riskScore }
 
+    /// The file's verdict under the default thresholds. For verdicts under
+    /// configured thresholds, use `verdict(thresholds:)`.
     public var verdict: Verdict { Verdict.from(riskScore: riskScore) }
+
+    /// The file's verdict under the given thresholds.
+    /// - Parameter thresholds: The cutoffs to apply.
+    /// - Returns: The recommended verdict for this file.
+    public func verdict(thresholds: Thresholds) -> Verdict {
+        Verdict.from(riskScore: riskScore, thresholds: thresholds)
+    }
 }
 
 /// How much the score is backed by the repository's own history.
@@ -166,6 +209,7 @@ public struct Assessment: Sendable, Equatable, Codable {
     public let riskScore: Double
     public let verdict: Verdict
     public let calibration: Calibration
+    public let thresholds: Thresholds
     public let files: [FileAssessment]
 
     public init(
@@ -173,12 +217,14 @@ public struct Assessment: Sendable, Equatable, Codable {
         riskScore: Double,
         verdict: Verdict,
         calibration: Calibration,
+        thresholds: Thresholds = .default,
         files: [FileAssessment]
     ) {
         self.scope = scope
         self.riskScore = riskScore
         self.verdict = verdict
         self.calibration = calibration
+        self.thresholds = thresholds
         self.files = files
     }
 

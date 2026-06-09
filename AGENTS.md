@@ -11,7 +11,10 @@ A deterministic change-risk engine. It reads a git diff and emits a verdict — 
 
 1. The core stays AI-free. Never add a hosted-LLM or local-model dependency to `AugurKit`.
    Optional AI lives only in `augur explain`, delegated to `fledge`.
-2. `AugurKit` has **zero third-party dependencies**. Keep it that way.
+2. `AugurKit` has **zero third-party dependencies**. Keep it that way. Config parsing
+   (`.augur.toml` via `TOMLDecoder`) lives in the **CLI target only**: the CLI decodes the
+   file, then constructs `RiskEngine(weights:rules:thresholds:)` and injects it into the pure
+   engine. Verdict thresholds are configurable via the `Thresholds` type in `AugurKit`.
 3. Scoring must stay **deterministic** — no `Date()`/randomness inside the engine; `now` is
    injected at the CLI boundary so tests are reproducible.
 4. Every signal must carry a human-readable `detail`. No opaque numbers.

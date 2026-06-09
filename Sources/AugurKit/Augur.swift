@@ -23,6 +23,38 @@ public struct Augur: Sendable {
         let history = HistorySnapshot(commits: try probe.recentCommits(limit: historyLimit))
         return engine.assess(scope: scope, changedFiles: changed, history: history, now: now)
     }
+
+    /// Assess a scope against a pre-built history snapshot (e.g. from a cache),
+    /// skipping the `git log` walk. `now` is injectable for deterministic tests.
+    /// - Parameters:
+    ///   - scope: The diff scope to assess.
+    ///   - history: A snapshot, typically rebuilt from a `CalibrationCache`.
+    ///   - now: Reference time for recency signals.
+    /// - Returns: The assessment.
+    public func assess(
+        scope: DiffScope,
+        history: HistorySnapshot,
+        now: Int = Int(Date().timeIntervalSince1970)
+    ) throws -> Assessment {
+        let changed = try probe.changedFiles(in: scope)
+        guard !changed.isEmpty else { throw AugurError.noChanges }
+        return engine.assess(scope: scope, changedFiles: changed, history: history, now: now)
+    }
+
+    /// Walks history once and returns a `CalibrationCache` pinned to the current `HEAD`.
+    /// - Returns: A serializable calibration cache.
+    public func calibrate() throws -> CalibrationCache {
+        let commits = try probe.recentCommits(limit: historyLimit)
+        let snapshot = HistorySnapshot(commits: commits)
+        let head = try probe.headSHA()
+        return snapshot.makeCache(head: head)
+    }
+
+    /// The current `HEAD` SHA of the underlying repository.
+    /// - Returns: The SHA, or an empty string if unavailable.
+    public func currentHead() throws -> String {
+        try probe.headSHA()
+    }
 }
 
 // MARK: - JSON

@@ -16,6 +16,13 @@ so scoring is verified without invoking `git`. `now` is injected for determinist
 | `testIncidentHistoryRaisesRiskOnlyWhenCalibrated` | Revert-prone file raises `incident`; calibration `> 0.5`. |
 | `testNumstatParsing` | `git diff --numstat` parsing, including binary (`-`) files. |
 | `testLogParsing` | Single-pass log parsing and incident-subject detection. |
+| `testDefaultThresholdsMatchOriginalBehavior` | `Thresholds.default` is `35`/`65`; `Verdict.from(riskScore:thresholds: .default)` equals the convenience overload at the `35`/`65` boundaries. |
+| `testCustomThresholdsChangeVerdict` | Tightening thresholds escalates the verdict without changing the `riskScore`; `Assessment.thresholds` reflects the config. |
+| `testThresholdsClampReviewBelowBlock` | `Thresholds` clamps `review` to be no greater than `block`. |
+| `testCustomRulesMergeWithDefaults` | Custom rules merged onto the defaults match new paths while built-in categories still match. |
+| `testCustomRuleRaisesRiskInEngine` | A merged custom rule raises a file's `sensitivity` signal and overall score. |
+| `testCalibrationCacheRoundTrips` | A `CalibrationCache` encodes→decodes→rebuilds into a snapshot scoring identically to the live one. |
+| `testCacheReportsBandAndConfidence` | The cache reports the correct calibration `band` and `confidence` for its volume. |
 
 ## Manual / dogfood
 
