@@ -61,6 +61,14 @@
 - [x] Spec → v7 (Public API, invariants, behavioral examples, change log); `fledge spec check` 0 errors.
 - [x] Substantially expanded tests: CODEOWNERS semantics, engine codeowners signal + weights-sum + determinism (byte-identical JSON), parser/diff robustness (malformed/empty LCOV/Cobertura/JaCoCo/Go, binary/rename/unicode/space numstat, unified=0 edge cases, log parsing), pathological globs (63 → 114 tests).
 
+## Done (v9)
+
+- [x] Native markdown report (`MarkdownReporter.swift`, Foundation-only, `Sendable`): `render(_:) -> String` emitting deterministic GitHub-flavored markdown: verdict heading with a per-verdict emoji (✅/⚠️/⛔, no em-dashes), a confidence/calibration line, a riskiest-first `| File | Risk | Verdict | Top signal |` table capped at `maxRows` (25) with an "and N more" overflow line, and a trailing `<!-- augur-report -->` marker for sticky PR comments. Table cells escape `\`/`|`/newlines.
+- [x] CLI: `check --markdown` prints the report to stdout, mutually exclusive with `--json` and `--sarif` (validated with a clear error).
+- [x] CI (`ci.yml`): meaningful PR risk range (`origin/<base>..HEAD` on `pull_request`, `HEAD~1..HEAD` on push) applied to the commit-status step and the new steps; `pull-requests: write` added; a PR-only step writes the markdown to `$GITHUB_STEP_SUMMARY` and posts/updates a sticky PR comment found via the `<!-- augur-report -->` marker (best-effort).
+- [x] Tests: heading per verdict, riskiest-first table order, top-signal selection, marker presence, row-cap overflow, pipe escaping, determinism, and a golden markdown snapshot (136 → 151 tests).
+- [x] Spec → v9 (Public API, behavioral example, change log); `fledge spec check` 0 errors. Docs: `docs/cli.md`, `docs/ci-integration.md`, README usage.
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).

@@ -1,0 +1,11 @@
+### augur: ⚠️ REVIEW - risk 58/100
+
+Confidence 42/100 - calibration history-backed (22 incidents / 320 commits).
+
+| File | Risk | Verdict | Top signal |
+| --- | ---: | --- | --- |
+| `Sources/Auth/TokenStore.swift` | 82 | ⛔ block | sensitivity: matches auth path |
+| `Sources/Core/Engine.swift` | 48 | ⚠️ review | churn: 190 lines changed |
+| `Sources/Core/Formatter.swift` | 14 | ✅ proceed | churn: 24 lines changed |
+
+<!-- augur-report -->

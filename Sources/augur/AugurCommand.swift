@@ -216,6 +216,9 @@ struct Check: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
 
+    @Flag(name: .long, help: "Emit a GitHub-flavored markdown report (for PR comments / job summaries). Mutually exclusive with --json and --sarif.")
+    var markdown = false
+
     @Flag(name: .long, help: "Emit SARIF 2.1.0 (for GitHub code scanning). Mutually exclusive with --json.")
     var sarif = false
 
@@ -232,8 +235,9 @@ struct Check: AsyncParsableCommand {
     private var wantsSarif: Bool { sarif || sarifOut != nil }
 
     func validate() throws {
-        if json && wantsSarif {
-            throw ValidationError("--json and --sarif are mutually exclusive.")
+        let selected = [json, markdown, wantsSarif].filter { $0 }.count
+        if selected > 1 {
+            throw ValidationError("--json, --markdown, and --sarif are mutually exclusive.")
         }
     }
 
@@ -248,6 +252,8 @@ struct Check: AsyncParsableCommand {
                 try emitSarif(assessment, augur: augur, scope: diffScope)
             } else if json {
                 print(try assessment.jsonString())
+            } else if markdown {
+                print(MarkdownReporter.render(assessment))
             } else {
                 print(Reporter.render(assessment, verbose: verbose, color: colorOptions.enabled()))
             }
@@ -263,6 +269,15 @@ struct Check: AsyncParsableCommand {
                 try emitSarif(empty, augur: augur, scope: diffScope)
             } else if json {
                 print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[],\"excludedPaths\":[]}")
+            } else if markdown {
+                let empty = Assessment(
+                    scope: diffScope.label,
+                    riskScore: 0,
+                    verdict: .proceed,
+                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
+                    files: []
+                )
+                print(MarkdownReporter.render(empty))
             } else {
                 print("augur · no changes to assess")
             }

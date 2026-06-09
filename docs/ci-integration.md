@@ -56,9 +56,9 @@ published binary rather than rebuilding) is not wired up yet, so don't add
 augur's own CI (`.github/workflows/ci.yml`) posts its self-assessment as a
 GitHub **commit status** so the verdict shows up as a check on the commit and PR
 pages, next to the rest of CI. The job grants `statuses: write` and, after the
-gate step, computes the verdict from
-`augur check --range <range> --json` (range `origin/main..HEAD`, falling back to
-`HEAD~1..HEAD`), then posts it:
+gate step, computes the verdict from `augur check --range <range> --json` using
+the shared PR-aware range (`origin/<base>..HEAD` on a `pull_request`,
+`HEAD~1..HEAD` on a push to main), then posts it:
 
 ```sh
 gh api -X POST repos/<owner>/<repo>/statuses/<sha> \
@@ -74,6 +74,45 @@ block-level change shows a red `augur` check. The SHA is the PR head
 best-effort (`|| echo "status post skipped"`) so a token or permission hiccup can
 never redden CI, and an empty/first-commit range is skipped cleanly. It uses the
 default `GITHUB_TOKEN`, which is sufficient given `statuses: write`.
+
+## PR report: markdown, sticky comment, and job summary
+
+`augur check --markdown` renders a deterministic GitHub-flavored markdown report
+for the assessed range: a verdict heading (`### augur: ⚠️ REVIEW - risk 58/100`,
+emoji per verdict: `proceed → ✅`, `review → ⚠️`, `block → ⛔`), a
+confidence/calibration line, a riskiest-first per-file table
+(`| File | Risk | Verdict | Top signal |`, capped at 25 rows with an "and N more"
+line), and a trailing hidden marker comment `<!-- augur-report -->` on its own
+line. It is mutually exclusive with `--json` and `--sarif`.
+
+```sh
+augur check --range origin/main..HEAD --markdown
+```
+
+augur's own CI (`.github/workflows/ci.yml`) uses this on `pull_request` runs to
+give the PR three layers of visibility, all best-effort so a permissions hiccup
+never reddens CI:
+
+- **Meaningful PR risk.** A shared *range* step resolves the diff to the whole PR
+  on `pull_request` (`origin/${{ github.base_ref }}..HEAD`, after
+  `git fetch origin "${{ github.base_ref }}" --depth=200`) and to the landed
+  commit on push to main (`HEAD~1..HEAD`). That same range feeds the gate, the
+  commit-status step, and the report step, so the `augur` status risk number
+  reflects the *entire* PR diff rather than a single commit.
+- **Job summary.** The PR-only step writes the markdown to `"$GITHUB_STEP_SUMMARY"`,
+  so the risk table renders on the Actions run summary page.
+- **Sticky PR comment.** The same step finds an existing comment containing the
+  `<!-- augur-report -->` marker via
+  `gh api repos/<owner>/<repo>/issues/<pr>/comments --paginate`; if found it
+  PATCHes that comment (`gh api -X PATCH .../issues/comments/<id> -f body=@file`),
+  else it POSTs a new one (`gh api -X POST .../issues/<pr>/comments -f body=@file`).
+  The comment is updated in place on every push, so the PR always shows the
+  current risk table without accumulating duplicates.
+
+The job grants `pull-requests: write` (alongside `statuses: write`) and uses the
+default `GITHUB_TOKEN` (`GH_TOKEN: ${{ github.token }}`). Each `gh` call is
+guarded (`|| echo "comment skipped"`) so a token or permission hiccup can never
+redden CI.
 
 ## Live README badge (served from GitHub Pages)
 

@@ -88,6 +88,7 @@ augur check                         # assess working-tree changes
 augur check --range main..HEAD      # assess a range (range-first)
 augur check --staged                # assess staged changes (pre-commit)
 augur check --json                  # machine-readable, sorted-key JSON
+augur check --markdown              # GitHub-flavored markdown (PR comments / job summaries)
 augur check --sarif                 # SARIF 2.1.0 for GitHub code scanning
 augur check --sarif-out augur.sarif # write SARIF to a file (implies --sarif)
 augur check -v                      # show every contributing signal
