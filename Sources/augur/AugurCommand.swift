@@ -107,6 +107,35 @@ struct CoverageOptions: ParsableArguments {
     }
 }
 
+/// CODEOWNERS discovery options shared by `check` and `gate`. When a CODEOWNERS
+/// file is found, changed files with no declared owner raise the `codeowners`
+/// signal; repos without one are never penalized.
+struct CodeOwnersOptions: ParsableArguments {
+    @Flag(name: .long, help: "Disable CODEOWNERS auto-discovery (the codeowners signal stays neutral).")
+    var noCodeowners = false
+
+    /// Resolves a parsed `CodeOwners` by discovering a CODEOWNERS file at the
+    /// standard repo-root locations (`.github/CODEOWNERS`, `CODEOWNERS`,
+    /// `docs/CODEOWNERS`). Prints a one-line note to stderr when one is loaded.
+    /// Returns `nil` when `--no-codeowners` is set or no file exists.
+    /// - Parameter repoPath: The repository root.
+    /// - Returns: The parsed owners model, or `nil`.
+    func resolved(repoPath: String) -> CodeOwners? {
+        guard !noCodeowners else { return nil }
+        let fileManager = FileManager.default
+        for location in CodeOwners.standardLocations {
+            let candidate = (repoPath as NSString).appendingPathComponent(location)
+            guard fileManager.fileExists(atPath: candidate),
+                  let data = fileManager.contents(atPath: candidate) else { continue }
+            let text = String(decoding: data, as: UTF8.self)
+            let owners = CodeOwners.parse(text)
+            Diagnostics.note("codeowners: loaded \(candidate) (\(owners.rules.count) rule(s))")
+            return owners
+        }
+        return nil
+    }
+}
+
 struct ScopeOptions: ParsableArguments {
     @Option(name: .long, help: "A git range to assess, e.g. 'main..HEAD'.")
     var range: String?
@@ -147,6 +176,7 @@ struct Check: AsyncParsableCommand {
     @OptionGroup var configOptions: ConfigOptions
     @OptionGroup var coverageOptions: CoverageOptions
     @OptionGroup var excludeOptions: ExcludeOptions
+    @OptionGroup var codeOwnersOptions: CodeOwnersOptions
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -176,8 +206,9 @@ struct Check: AsyncParsableCommand {
         let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
         let filter = excludeOptions.resolvedFilter(configured: configExcludes)
+        let codeOwners = codeOwnersOptions.resolved(repoPath: scope.path)
         do {
-            let assessment = try assess(augur, scope: diffScope, coverage: coverage, filter: filter)
+            let assessment = try assess(augur, scope: diffScope, coverage: coverage, filter: filter, codeOwners: codeOwners)
             if wantsSarif {
                 try emitSarif(assessment, augur: augur, scope: diffScope)
             } else if json {
@@ -224,17 +255,26 @@ struct Check: AsyncParsableCommand {
         _ augur: Augur,
         scope diffScope: DiffScope,
         coverage: CoverageReport?,
-        filter: PathFilter?
+        filter: PathFilter?,
+        codeOwners: CodeOwners?
     ) throws -> Assessment {
-        guard cached else { return try augur.assess(scope: diffScope, coverage: coverage, filter: filter) }
+        guard cached else {
+            return try augur.assess(scope: diffScope, coverage: coverage, filter: filter, codeOwners: codeOwners)
+        }
         guard let cache = CacheStore.load(repoPath: scope.path) else {
             Diagnostics.note("no cache found at \(CacheStore.path(repoPath: scope.path)); computing live. Run `augur calibrate` first.")
-            return try augur.assess(scope: diffScope, coverage: coverage, filter: filter)
+            return try augur.assess(scope: diffScope, coverage: coverage, filter: filter, codeOwners: codeOwners)
         }
         if let head = try? augur.currentHead(), !head.isEmpty, !cache.head.isEmpty, head != cache.head {
             Diagnostics.note("cache is stale (calibrated at \(cache.head.prefix(8)), HEAD is \(head.prefix(8))); results may be outdated.")
         }
-        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache), coverage: coverage, filter: filter)
+        return try augur.assess(
+            scope: diffScope,
+            history: HistorySnapshot(cache: cache),
+            coverage: coverage,
+            filter: filter,
+            codeOwners: codeOwners
+        )
     }
 }
 
@@ -249,6 +289,7 @@ struct Gate: AsyncParsableCommand {
     @OptionGroup var configOptions: ConfigOptions
     @OptionGroup var coverageOptions: CoverageOptions
     @OptionGroup var excludeOptions: ExcludeOptions
+    @OptionGroup var codeOwnersOptions: CodeOwnersOptions
 
     @Option(name: .long, help: "Threshold verdict: proceed, review, or block.")
     var threshold: String = "review"
@@ -263,9 +304,10 @@ struct Gate: AsyncParsableCommand {
         let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
         let filter = excludeOptions.resolvedFilter(configured: configExcludes)
+        let codeOwners = codeOwnersOptions.resolved(repoPath: scope.path)
         let assessment: Assessment
         do {
-            assessment = try augur.assess(scope: diffScope, coverage: coverage, filter: filter)
+            assessment = try augur.assess(scope: diffScope, coverage: coverage, filter: filter, codeOwners: codeOwners)
         } catch AugurError.noChanges {
             return  // nothing to gate
         }
