@@ -6,7 +6,7 @@ agent loops. Use `augur gate` to fail a job when a verdict crosses a threshold.
 > **Scope.** Everything here is **macOS-only** and runs on CorvidLabs'
 > self-hosted **macOS ARM64** runners (`runs-on: [self-hosted, macOS]`). The
 > composite actions and reusable workflows build augur (and attest) *from a
-> checkout* — there is no published binary yet, and cross-repo tool packaging is
+> checkout*. There is no published binary yet, and cross-repo tool packaging is
 > a deliberately deferred later step.
 
 ## The one-liner
@@ -48,7 +48,7 @@ jobs:
 
 **Deferred:** the action builds augur from *its own checkout*, which is correct
 for augur self-gating its CI. Reusing it from *other* repos (installing a
-published binary rather than rebuilding) is not wired up yet — don't add
+published binary rather than rebuilding) is not wired up yet, so don't add
 `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
 
 ## SARIF upload (GitHub code scanning)
@@ -68,7 +68,7 @@ Each assessed file becomes one SARIF `result` under the single rule
 added line when known.
 
 > **GHAS caveat.** `upload-sarif` requires **GitHub Advanced Security** to be
-> enabled — which is free on public repos but a paid add-on on **private** repos.
+> enabled. That is free on public repos but a paid add-on on **private** repos.
 > On a private repo without GHAS the upload step fails. The full
 > `examples/workflows/sarif.yml` documents this and keeps the gate independent of
 > the upload, so you still get a deterministic pass/fail even where GHAS is off.
@@ -94,7 +94,7 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
 
 ## The augur → attest trust pipeline
 
-A verdict from `augur` is *ephemeral* — it lives for one CI run and is gone. Its
+A verdict from `augur` is *ephemeral*: it lives for one CI run and is gone. Its
 sibling [`attest`](https://github.com/CorvidLabs/attest) makes it durable:
 `attest` records *who or what reviewed a change, and at what confidence* as a
 signed-or-unsigned provenance note keyed to the commit SHA (stored in git notes),

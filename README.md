@@ -1,12 +1,12 @@
 # augur
 
-**Graded trust for changes.** `augur` reads a diff and tells you how risky it is — and
-whether a human should look — as a deterministic, scriptable verdict: `proceed`, `review`,
+**Graded trust for changes.** `augur` reads a diff and tells you how risky it is, and
+whether a human should look, as a deterministic, scriptable verdict: `proceed`, `review`,
 or `block`.
 
 It's built for the world where agents write most of the code: humans can't hand-review the
 volume, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is
-that missing primitive — language-agnostic, CI-agnostic, and **requiring no API key and no
+that missing primitive. It's language-agnostic, CI-agnostic, and **requires no API key and no
 LLM**. AI is optional and additive.
 
 ```
@@ -29,7 +29,7 @@ augur · main..HEAD
 ## Why it exists
 
 Agents made code cheap to produce. The scarce resource is now *trust*. `augur` turns the
-senior-engineer instinct — "this part is fine, that part needs a careful look" — into a
+senior-engineer instinct ("this part is fine, that part needs a careful look") into a
 deterministic artifact that both humans and agents can act on.
 
 - **Humans** use it to triage: spend review attention on the risky 10% of a 40-file PR.
@@ -38,12 +38,12 @@ deterministic artifact that both humans and agents can act on.
 
 ## How it scores
 
-Every signal is derived from `git` history and the filesystem — no model, no network:
+Every signal is derived from `git` history and the filesystem. No model, no network:
 
 | Signal | What it catches |
 |--------|-----------------|
 | **sensitivity** | Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests. |
-| **test-gap** | Code changed with no test in the changeset — *or*, with a coverage report, the fraction of changed lines left uncovered. |
+| **test-gap** | Code changed with no test in the changeset, *or*, with a coverage report, the fraction of changed lines left uncovered. |
 | **churn** | Hot files that change constantly are fragile. |
 | **coupling** | A file's usual co-change partner is *absent* from the change. |
 | **diff-shape** | Large single-file edits are harder to review. |
@@ -53,7 +53,7 @@ Every signal is derived from `git` history and the filesystem — no model, no n
 
 Scoring has two layers:
 
-1. A **transparent heuristic prior** with documented weights — always applies, even on a
+1. A **transparent heuristic prior** with documented weights. It always applies, even on a
    brand-new repo.
 2. A **history calibration** that scales the incident signal by how much the repository's
    own revert/hotfix record backs it. Every assessment reports `calibration`
@@ -114,16 +114,16 @@ Use `--color always` to force it (handy for screenshots) or `--color never` to d
 
 The color scheme is semantic and intentionally restrained:
 
-- **Verdict** — `proceed` green, `review` amber/yellow, `block` bold red.
-- **Risk meter** — a `█`/`░` gradient bar tinted by level (green → amber → red).
-- **Headers / labels** — bold; **secondary & signal detail** — dim/gray.
-- **File paths** — cyan; each per-file row is tinted by that file's own verdict.
-- **Confidence & calibration** — cyan.
+- **Verdict:** `proceed` green, `review` amber/yellow, `block` bold red.
+- **Risk meter:** a `█`/`░` gradient bar tinted by level (green → amber → red).
+- **Headers / labels:** bold; secondary and signal detail are dim/gray.
+- **File paths:** cyan; each per-file row is tinted by that file's own verdict.
+- **Confidence & calibration:** cyan.
 
 ### Coverage-aware test-gap (`--coverage`)
 
 By default the **test-gap** signal is a coarse heuristic: did the changeset touch any
-test file? Supply a line-coverage report and it becomes precise — it scores the fraction
+test file? Supply a line-coverage report and it becomes precise. It scores the fraction
 of the change's *added* lines that are actually covered:
 
 ```sh
@@ -138,10 +138,10 @@ dependency):
 
 | Format | Typical name | How a line is instrumented / covered |
 |--------|--------------|--------------------------------------|
-| **LCOV** | `lcov.info` | `DA:<line>,<hits>` — covered when `hits > 0`. |
-| **Cobertura** | `coverage.xml` | `<line number hits>` — covered when `hits > 0`. |
-| **JaCoCo** | `jacoco.xml` | `<line nr mi ci>` under `<package><sourcefile>` — covered when `ci` (covered instructions) `> 0`; path is `package@name`/`sourcefile@name`. |
-| **Go coverprofile** | `cover.out` | `path:start.col,end.col stmts count` blocks — every line in `start…end`; covered when *any* covering block has `count > 0`. |
+| **LCOV** | `lcov.info` | `DA:<line>,<hits>`. Covered when `hits > 0`. |
+| **Cobertura** | `coverage.xml` | `<line number hits>`. Covered when `hits > 0`. |
+| **JaCoCo** | `jacoco.xml` | `<line nr mi ci>` under `<package><sourcefile>`. Covered when `ci` (covered instructions) `> 0`; path is `package@name`/`sourcefile@name`. |
+| **Go coverprofile** | `cover.out` | `path:start.col,end.col stmts count` blocks; every line in `start…end`. Covered when *any* covering block has `count > 0`. |
 
 augur also **auto-detects** a report at the repo root when `--coverage` is absent, trying these
 names in order and using the **first** that exists (logged to stderr): `lcov.info`,
@@ -167,14 +167,14 @@ prefix (`Sources/App/Service.swift` vs `/build/checkout/Sources/App/Service.swif
 augur matches by **normalized longest common suffix** at path-component boundaries. This
 tolerates prefix differences, but if two distinct files share an identical trailing suffix
 (`a/util.swift` and `b/util.swift` against a bare `util.swift`) the match is ambiguous and
-resolved deterministically (shorter then lexicographically-smaller path) — it may not be the
+resolved deterministically (shorter then lexicographically-smaller path), so it may not be the
 file you intended. Prefer emitting coverage with repo-relative paths.
 
 ### SARIF for GitHub code scanning (`--sarif`)
 
 `augur check --sarif` emits a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 log so augur's risk findings can be uploaded to GitHub code scanning and annotate a pull
-request **inline** — each changed file gets an annotation at its first added line.
+request **inline**: each changed file gets an annotation at its first added line.
 
 ```sh
 augur check --range main..HEAD --sarif                  # SARIF to stdout
@@ -213,7 +213,7 @@ copy-paste CI workflow that uploads the SARIF is in
 
 **Honest caveat (GHAS on private repos).** Uploading SARIF to GitHub code scanning via
 `github/codeql-action/upload-sarif` requires **GitHub Advanced Security (GHAS)** when the
-repository is **private** — without it the upload step returns a `403`. It works out of the
+repository is **private**; without it the upload step returns a `403`. It works out of the
 box once the repo is **public**, or with GHAS enabled on a private repo. The example
 workflow marks the upload `continue-on-error: true` so the job stays green until GHAS/public
 is in place; remove that once it is. Generating the SARIF file itself needs nothing special.
@@ -221,7 +221,7 @@ is in place; remove that once it is. Generating the SARIF file itself needs noth
 ### Configuration (`.augur.toml`)
 
 Drop an `.augur.toml` at the repo root and `augur` discovers it automatically (override
-with `--config <path>`, ignore with `--no-config`). Every section is optional — an absent
+with `--config <path>`, ignore with `--no-config`). Every section is optional; an absent
 file means built-in defaults, so configuration is strictly additive. It is parsed in the
 CLI layer only; the engine library stays dependency-free.
 
@@ -257,7 +257,7 @@ A worked, commented config and runnable scripts live in [`examples/`](examples/)
 
 ### Excluding generated & vendored files (`[exclude]` / `--exclude`)
 
-Vendored dependencies, generated code, and lockfiles add noise to a risk verdict — a
+Vendored dependencies, generated code, and lockfiles add noise to a risk verdict. A
 9,000-line `vendor/` drop or a churny `Package.resolved` is not something a reviewer
 should be scored on. List globs under `[exclude] paths` (or pass `--exclude <glob>`,
 repeatable) and `augur` removes matching files **before** scoring: they appear in neither
@@ -289,12 +289,12 @@ drops the configured ones while keeping any passed on the command line.
 If your repo has a `CODEOWNERS` file, `augur` uses it to flag review-routing gaps. A changed
 file with **no declared owner** raises the `codeowners` signal (risk `0.6`, "no CODEOWNERS
 owner"); an **owned** file neutralizes it (risk `0`, detail lists the owners). When there is
-**no `CODEOWNERS` file at all**, the signal contributes `0` — repos without one are never
+**no `CODEOWNERS` file at all**, the signal contributes `0`; repos without one are never
 penalized.
 
 `augur` auto-discovers `CODEOWNERS` at the standard locations (`.github/CODEOWNERS`,
-`CODEOWNERS`, `docs/CODEOWNERS`; first found wins) and follows GitHub semantics — **the last
-matching pattern wins**, reusing the same glob engine as `--exclude`:
+`CODEOWNERS`, `docs/CODEOWNERS`; first found wins) and follows GitHub semantics (**the last
+matching pattern wins**), reusing the same glob engine as `--exclude`:
 
 ```text
 # .github/CODEOWNERS
@@ -312,7 +312,7 @@ The owner is surfaced in the signal detail (human `-v` output and JSON). Pass
 `augur calibrate` walks git history once and writes a serializable model to
 `.augur/cache.json` (pinned to the current `HEAD`), reporting the backing volume and
 calibration band. `augur check --cached` then reuses that model instead of re-running
-`git log` — ideal for tight agent loops. If `HEAD` has moved since calibration, `check
+`git log`, which is ideal for tight agent loops. If `HEAD` has moved since calibration, `check
 --cached` prints a staleness warning to stderr but stays usable; with no cache it falls
 back to live computation. `.augur/` is git-ignored and never committed.
 
@@ -358,7 +358,7 @@ jobs:
 **Deliberately deferred:** this action builds augur from *its own checkout*, which is correct
 for augur self-gating its CI. Reusing it from *other* repos (installing a published augur
 binary rather than rebuilding the action's checkout) is a later step and is **not** wired up
-yet — don't add `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
+yet, so don't add `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
 
 ### For agents
 
@@ -398,7 +398,7 @@ The engine (`AugurKit`) has **zero third-party dependencies** and is fully testa
 
 ## Trust layer (augur → attest)
 
-A verdict from `augur` is *ephemeral* — it lives for one CI run and is gone. Its sibling
+A verdict from `augur` is *ephemeral*: it lives for one CI run and is gone. Its sibling
 [`attest`](https://github.com/CorvidLabs/attest) makes it durable: `attest` records *who or
 what reviewed a change, and at what confidence* as a signed-or-unsigned provenance note
 keyed to the commit SHA (stored in git notes), and gates CI / agent loops on a policy.
@@ -411,16 +411,17 @@ attest verify --policy .attest.json                     # gate on it
 ```
 
 `attest sign --from-augur -` copies augur's `verdict` and maps its `riskScore` (0...100) to
-`confidence = 1 − riskScore/100`. A worked, end-to-end run — an agent attests a `review`
+`confidence = 1 − riskScore/100`. A worked, end-to-end run is in
+[`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh): an agent attests a `review`
 change, a policy that demands human approval for `review`+ verdicts FAILs, then a human
-signs off and it PASSes — is in [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
+signs off and it PASSes.
 Verified output (real exit codes):
 
 ```
 == 3) augur check --json | attest sign --from-augur - (agent records trust) ==
 attest · recorded agent:claude on f0ec5e6256
 
-== 5) attest verify — agent-only record FAILS the policy ==
+== 5) attest verify: agent-only record FAILS the policy ==
   policy: requireHumanApprovalWhenVerdictAtLeast = review
 attest verify · [x] FAIL (1 commit checked)
   violations:
@@ -433,7 +434,7 @@ attest verify · [ok] PASS (1 commit checked)
   attest verify -> exit 0   (human approval now satisfies the policy)
 ```
 
-The policy clears as soon as **any** human-approved attestation exists on the commit — the
+The policy clears as soon as **any** human-approved attestation exists on the commit: the
 human signs off with a plain `--human-approved` and need not restate the verdict.
 
 ### Reusable CI workflow
@@ -457,7 +458,7 @@ git commit --no-verify   # deliberately bypass for one commit
 
 **Honest scope.** Everything here is **macOS-only** and runs on CorvidLabs' self-hosted
 **macOS ARM64** runners (`runs-on: [self-hosted, macOS]`). Both `trust.yml` and the
-demo build augur (and attest) *from a checkout* — there is no published binary yet, and
+demo build augur (and attest) *from a checkout*. There is no published binary yet, and
 **cross-repo tool packaging** (installing prebuilt augur / attest into a foreign repo
 without a Swift toolchain) is a deliberately deferred later step.
 
@@ -465,13 +466,13 @@ without a Swift toolchain) is a deliberately deferred later step.
 
 In-depth docs live in [`docs/`](docs/):
 
-- [Architecture](docs/architecture.md) — `AugurKit` vs the CLI, the signal pipeline, two-layer scoring + calibration, and the zero-dependency invariant.
-- [Signals](docs/signals.md) — every signal, what it catches, its weight, and how to tune it.
-- [Configuration](docs/configuration.md) — the full `.augur.toml` reference (thresholds, weights, rules, exclude, codeowners) plus `--config` / `--no-config`.
-- [CLI reference](docs/cli.md) — every command and flag (`check`, `gate`, `calibrate`, `explain`) with examples, glob syntax, exit codes, and JSON shape.
-- [Coverage](docs/coverage.md) — supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats.
-- [CI integration](docs/ci-integration.md) — self-hosted macOS, the `augur-gate` action, SARIF upload (GHAS caveat), the pre-commit hook, and the augur → attest trust pipeline.
-- [Dogfooding](docs/dogfooding.md) — **proof:** augur scores augur, with real captured output for a PROCEED on its own change *and* a caught risky change (non-zero gate), plus an honest note on calibration.
+- [Architecture](docs/architecture.md): `AugurKit` vs the CLI, the signal pipeline, two-layer scoring + calibration, and the zero-dependency invariant.
+- [Signals](docs/signals.md): every signal, what it catches, its weight, and how to tune it.
+- [Configuration](docs/configuration.md): the full `.augur.toml` reference (thresholds, weights, rules, exclude, codeowners) plus `--config` / `--no-config`.
+- [CLI reference](docs/cli.md): every command and flag (`check`, `gate`, `calibrate`, `explain`) with examples, glob syntax, exit codes, and JSON shape.
+- [Coverage](docs/coverage.md): supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats.
+- [CI integration](docs/ci-integration.md): self-hosted macOS, the `augur-gate` action, SARIF upload (GHAS caveat), the pre-commit hook, and the augur → attest trust pipeline.
+- [Dogfooding](docs/dogfooding.md): the proof that augur scores augur, with real captured output for a PROCEED on its own change *and* a caught risky change (non-zero gate), plus an honest note on calibration.
 
 ## Dogfooding (proof)
 
@@ -490,15 +491,15 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 
 ## Roadmap
 
-- [x] `augur calibrate` — cache the history model; report backing volume (`check --cached`).
+- [x] `augur calibrate`: cache the history model; report backing volume (`check --cached`).
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
 - [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
 - [x] Composite `action.yml` ("augur gate") for self-hosted macOS self-gating.
-- [x] **`attest`** — signed provenance records keyed to commit SHAs: a verifiable trail of
+- [x] **`attest`**: signed provenance records keyed to commit SHAs, a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
   `attest` records that trust. See [Trust layer](#trust-layer-augur--attest) above and
   [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
-- Cross-repo tool packaging — ship prebuilt augur / attest binaries so foreign repos can gate
+- Cross-repo tool packaging: ship prebuilt augur / attest binaries so foreign repos can gate
   without a Swift toolchain (the composite actions and `trust.yml` build from a checkout today).
 
 ## License

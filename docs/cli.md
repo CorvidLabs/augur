@@ -15,7 +15,7 @@ Commands: [`check`](#check) (default), [`gate`](#gate), [`calibrate`](#calibrate
 |------|-------|
 | *(none)* | Working tree vs `HEAD` (staged + unstaged). |
 | `--range <a..b>` | An explicit git range, e.g. `main..HEAD`. |
-| `--staged` | Staged changes only (`git diff --cached`) — ideal for pre-commit. |
+| `--staged` | Staged changes only (`git diff --cached`); ideal for pre-commit. |
 | `-C, --path <dir>` | Path to the repository (default `.`). |
 
 ## check

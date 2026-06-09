@@ -1,12 +1,12 @@
 ---
 title: "Coverage"
-description: "Coverage-aware test-gap — supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats."
+description: "Coverage-aware test-gap: supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats."
 section: "Reference"
 order: 6
 ---
 
 By default the **test-gap** signal is a coarse heuristic: did the changeset touch
-any test file? Supply a line-coverage report and it becomes precise — it scores
+any test file? Supply a line-coverage report and it becomes precise. It scores
 the fraction of the change's *added* lines that are actually covered.
 
 ```sh
@@ -25,10 +25,10 @@ line parsing.
 
 | Format | Typical name | How a line is instrumented / covered |
 |--------|--------------|--------------------------------------|
-| **LCOV** | `lcov.info` | `DA:<line>,<hits>` — covered when `hits > 0`. |
-| **Cobertura** | `coverage.xml` | `<line number="N" hits="H"/>` — covered when `hits > 0`. |
-| **JaCoCo** | `jacoco.xml` | `<line nr="N" ci="C"/>` under `<package><sourcefile>` — covered when `ci` (covered instructions) `> 0`; reported path is `package@name`/`sourcefile@name`. |
-| **Go** | `cover.out` | `path:start.col,end.col stmts count` blocks — every line in `start…end`; covered when *any* covering block has `count > 0`. |
+| **LCOV** | `lcov.info` | `DA:<line>,<hits>`. Covered when `hits > 0`. |
+| **Cobertura** | `coverage.xml` | `<line number="N" hits="H"/>`. Covered when `hits > 0`. |
+| **JaCoCo** | `jacoco.xml` | `<line nr="N" ci="C"/>` under `<package><sourcefile>`. Covered when `ci` (covered instructions) `> 0`; reported path is `package@name`/`sourcefile@name`. |
+| **Go** | `cover.out` | `path:start.col,end.col stmts count` blocks; every line in `start…end`. Covered when *any* covering block has `count > 0`. |
 
 ## Auto-detection
 
@@ -80,6 +80,6 @@ suffix matching is unambiguous.
 
 ## Malformed input
 
-The parsers degrade gracefully — malformed or empty LCOV/Cobertura/JaCoCo/Go
+The parsers degrade gracefully: malformed or empty LCOV/Cobertura/JaCoCo/Go
 inputs yield a sensible empty (or partial) report rather than crashing. An input
 whose format cannot be detected at all throws `CoverageParser.ParseError.undetectableFormat`.

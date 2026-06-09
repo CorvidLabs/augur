@@ -1,8 +1,8 @@
-# Dogfooding — augur scores augur
+# Dogfooding: augur scores augur
 
 augur is a change-risk engine, so the most honest test is the obvious one:
 **augur runs augur on its own changes**, in CI and in a committed, runnable
-demo. Every block of output below is real — produced by the release binary
+demo. Every block of output below is real, produced by the release binary
 (`swift build -c release`) on this repository, not hand-written.
 
 Reproduce any of it:
@@ -17,7 +17,7 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 ## 1. augur trusts its own change (PROCEED)
 
 Running the release binary over augur's latest change
-(`augur check --range HEAD~1..HEAD`) yields a low-risk **PROCEED** — the
+(`augur check --range HEAD~1..HEAD`) yields a low-risk **PROCEED**: the
 structural signals see a routine, well-tested diff:
 
 ```
@@ -52,7 +52,7 @@ augur gate · proceed (risk 23)
 
 The demo then builds a controlled risky change in a throwaway `/tmp` repo: a
 sensitive secrets/auth file with a hard-coded credential plus a large block of
-untested functions — exactly what the `sensitivity`, `diff-shape`, and
+untested functions, exactly what the `sensitivity`, `diff-shape`, and
 `test-gap` signals exist to flag. augur returns **REVIEW** and names the reason:
 
 ```
@@ -70,7 +70,7 @@ augur · <BASE>..<HEAD>
   → an agent should request human review before merging
 ```
 
-Gating that change at `--threshold review` **exits non-zero — for real**. This
+Gating that change at `--threshold review` **exits non-zero, for real**. This
 is the load-bearing proof: the gate's exit code is captured and expected, not a
 script failure.
 
@@ -99,7 +99,7 @@ Notice the calibration line in every run above:
   calibration prior-only (2 incidents / 15 commits)
 ```
 
-`prior-only` means augur is scoring from its **heuristic prior** alone — it has
+`prior-only` means augur is scoring from its **heuristic prior** alone. It has
 not blended in a learned, repo-specific calibration model. That is the *honest*
 state for this repository, and worth explaining rather than hiding:
 
@@ -108,8 +108,8 @@ state for this repository, and worth explaining rather than hiding:
   "incident" signals (reverts, hotfixes). With so few commits, augur
   deliberately declines to over-fit a calibration model and falls back to the
   deterministic prior.
-- **The prior still works.** Both verdicts above — PROCEED on a routine change,
-  REVIEW on a secrets file — come straight from the structural signals, with no
+- **The prior still works.** Both verdicts above (PROCEED on a routine change,
+  REVIEW on a secrets file) come straight from the structural signals, with no
   learned history required. That is by design: augur is useful from commit one.
 - **Calibration sharpens as history grows.** On a repo with a longer,
   non-squashed history (or after `augur calibrate` walks more commits), augur
@@ -118,14 +118,14 @@ state for this repository, and worth explaining rather than hiding:
   move as augur's own history accumulates.
 
 In short: squash-merging keeps augur's *own* calibration thin, but the engine
-is honest about it and degrades gracefully to the prior — which is exactly the
+is honest about it and degrades gracefully to the prior, which is exactly the
 behavior you want a risk tool to have on a young repository.
 
 ---
 
 ## 4. Optional: record the verdict as durable trust (augur → attest)
 
-A verdict is *ephemeral* — it lives for one CI run. The sibling tool
+A verdict is *ephemeral*: it lives for one CI run. The sibling tool
 [`attest`](https://github.com/CorvidLabs/attest) makes it durable by recording
 *who or what reviewed a change, and at what confidence* as a provenance note
 keyed to the commit SHA, then gating CI on a policy. They compose over a pipe
@@ -136,10 +136,10 @@ augur check --json | attest sign --from-augur -   # record the trust
 attest verify --policy .attest.json                # gate on it
 ```
 
-A full, real-exit-code walkthrough — an agent attests a `review` change, a
-policy that demands human approval for `review`+ verdicts FAILs, then a human
-signs off and it PASSes — lives in
-[`examples/06-trust-pipeline.sh`](../examples/06-trust-pipeline.sh).
+A full, real-exit-code walkthrough lives in
+[`examples/06-trust-pipeline.sh`](../examples/06-trust-pipeline.sh): an agent
+attests a `review` change, a policy that demands human approval for `review`+
+verdicts FAILs, then a human signs off and it PASSes.
 
 ---
 
@@ -148,7 +148,7 @@ signs off and it PASSes — lives in
 - **CI** (`.github/workflows/ci.yml`): after `swift build` / `swift test` /
   `fledge spec check`, CI builds the release binary, prints augur's verdict on
   its own change (`origin/main..HEAD`, falling back to `HEAD~1..HEAD`), then
-  runs `augur gate --threshold block` as a **fatal** step — a genuinely
+  runs `augur gate --threshold block` as a **fatal** step: a genuinely
   block-level self-change fails CI, while proceed/review pass.
 - **Local** (`fledge run dogfood`): the same assess-and-gate, reproducible on
   your machine.

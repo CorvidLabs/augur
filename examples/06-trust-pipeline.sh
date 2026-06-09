@@ -97,7 +97,7 @@ cat > "$REPO/.attest.json" <<'EOF'
 }
 EOF
 
-echo "== 5) attest verify — agent-only record FAILS the policy =="
+echo "== 5) attest verify: agent-only record FAILS the policy =="
 echo "  policy: requireHumanApprovalWhenVerdictAtLeast = review"
 set +e
 "$ATTEST" verify -C "$REPO" --commit "$HEAD" --policy "$REPO/.attest.json"

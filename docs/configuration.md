@@ -1,7 +1,7 @@
 # Configuration
 
 `augur` runs with sensible built-in defaults and needs no configuration. To tune
-it, drop an `.augur.toml` at the repository root. Every section is optional — an
+it, drop an `.augur.toml` at the repository root. Every section is optional: an
 empty or absent file is exactly equivalent to the defaults, so configuration is
 strictly additive.
 
@@ -11,7 +11,7 @@ never sees TOML. Keys use `snake_case` and map to the engine's camelCase fields.
 ## Full reference
 
 ```toml
-# .augur.toml — every section is optional.
+# .augur.toml: every section is optional.
 
 # ── Verdict cutoffs (0...100). score >= block -> block; >= review -> review; else proceed.
 #    Defaults: review = 35, block = 65. review is clamped to be <= block.
@@ -20,8 +20,8 @@ review = 35
 block  = 65
 
 # ── Signal weights for the heuristic prior. Only listed keys are overridden;
-#    omitted keys keep their defaults. They need NOT sum to 1.0 — the engine
-#    normalizes by the total weight — but keeping them ~1.0 keeps scores intuitive.
+#    omitted keys keep their defaults. They need NOT sum to 1.0 (the engine
+#    normalizes by the total weight), but keeping them ~1.0 keeps scores intuitive.
 [weights]
 sensitivity = 0.2024
 test_gap    = 0.1656
@@ -62,7 +62,7 @@ paths = ["vendor/**", "**/*.generated.swift", "**/Package.resolved"]
 
 Maps the overall risk score to a verdict. `review` is clamped to be no greater
 than `block`, and both are clamped into `0...100`. Changing thresholds never
-changes the `riskScore` — only the score → verdict mapping.
+changes the `riskScore`, only the score → verdict mapping.
 
 ### `[weights]`
 
