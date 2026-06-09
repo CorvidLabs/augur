@@ -98,7 +98,27 @@ augur check --exclude 'vendor/**'   # drop vendored/generated paths from the ass
 augur check --no-exclude            # ignore [exclude] paths from .augur.toml
 
 augur check --no-codeowners         # disable CODEOWNERS-aware ownership scoring
+
+augur check --color auto            # color when stdout is a TTY (default)
+augur check --color always          # force color (e.g. for screenshots / pagers)
+augur check --color never           # plain output
 ```
+
+### Output & color (`--color`, `NO_COLOR`)
+
+The human-readable `check` report is colorized **only when it's safe**: by default
+(`--color auto`) color is emitted only when stdout is an interactive terminal *and* the
+[`NO_COLOR`](https://no-color.org) environment variable is unset. Piped, redirected,
+`--json`, and `--sarif` output is always plain, so scripts and CI capture clean text.
+Use `--color always` to force it (handy for screenshots) or `--color never` to disable it.
+
+The color scheme is semantic and intentionally restrained:
+
+- **Verdict** — `proceed` green, `review` amber/yellow, `block` bold red.
+- **Risk meter** — a `█`/`░` gradient bar tinted by level (green → amber → red).
+- **Headers / labels** — bold; **secondary & signal detail** — dim/gray.
+- **File paths** — cyan; each per-file row is tinted by that file's own verdict.
+- **Confidence & calibration** — cyan.
 
 ### Coverage-aware test-gap (`--coverage`)
 
