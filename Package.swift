@@ -37,6 +37,7 @@ let package = Package(
         .testTarget(
             name: "AugurKitTests",
             dependencies: ["AugurKit"],
+            exclude: ["__snapshots__"],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
