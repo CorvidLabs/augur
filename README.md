@@ -49,6 +49,7 @@ Every signal is derived from `git` history and the filesystem — no model, no n
 | **diff-shape** | Large single-file edits are harder to review. |
 | **ownership** | Bus-factor (single author) or diffuse ownership (many authors). |
 | **incident** | The file's own history of reverts / hotfixes. |
+| **codeowners** | A changed file with no declared owner in the repo's `CODEOWNERS` (neutral when there is no `CODEOWNERS` file). |
 
 Scoring has two layers:
 
@@ -95,6 +96,8 @@ augur check --no-coverage           # disable coverage auto-detection
 
 augur check --exclude 'vendor/**'   # drop vendored/generated paths from the assessment (repeatable)
 augur check --no-exclude            # ignore [exclude] paths from .augur.toml
+
+augur check --no-codeowners         # disable CODEOWNERS-aware ownership scoring
 ```
 
 ### Coverage-aware test-gap (`--coverage`)
@@ -213,6 +216,7 @@ block = 65
 [weights]
 sensitivity = 0.25
 test_gap = 0.20
+codeowners = 0.08   # weight of the CODEOWNERS ownership signal
 
 # Set true to use ONLY the custom rules below; default false MERGES them onto the built-ins.
 [sensitivity]
@@ -259,6 +263,29 @@ augur check --no-exclude    # ignore [exclude] from .augur.toml (ad-hoc --exclud
 
 CLI `--exclude` globs are *added* to any `[exclude] paths` from `.augur.toml`; `--no-exclude`
 drops the configured ones while keeping any passed on the command line.
+
+### CODEOWNERS-aware ownership (`codeowners`)
+
+If your repo has a `CODEOWNERS` file, `augur` uses it to flag review-routing gaps. A changed
+file with **no declared owner** raises the `codeowners` signal (risk `0.6`, "no CODEOWNERS
+owner"); an **owned** file neutralizes it (risk `0`, detail lists the owners). When there is
+**no `CODEOWNERS` file at all**, the signal contributes `0` — repos without one are never
+penalized.
+
+`augur` auto-discovers `CODEOWNERS` at the standard locations (`.github/CODEOWNERS`,
+`CODEOWNERS`, `docs/CODEOWNERS`; first found wins) and follows GitHub semantics — **the last
+matching pattern wins**, reusing the same glob engine as `--exclude`:
+
+```text
+# .github/CODEOWNERS
+*            @platform        # catch-all
+/src/        @backend-team    # overrides for src/
+/src/auth/   @security        # overrides again, more specific
+*.md         @docs-team
+```
+
+The owner is surfaced in the signal detail (human `-v` output and JSON). Pass
+`--no-codeowners` to disable, or tune its weight via `.augur.toml [weights] codeowners`.
 
 ### Calibrate & cache
 
@@ -413,6 +440,17 @@ git commit --no-verify   # deliberately bypass for one commit
 demo build augur (and attest) *from a checkout* — there is no published binary yet, and
 **cross-repo tool packaging** (installing prebuilt augur / attest into a foreign repo
 without a Swift toolchain) is a deliberately deferred later step.
+
+## Documentation
+
+In-depth docs live in [`docs/`](docs/):
+
+- [Architecture](docs/architecture.md) — `AugurKit` vs the CLI, the signal pipeline, two-layer scoring + calibration, and the zero-dependency invariant.
+- [Signals](docs/signals.md) — every signal, what it catches, its weight, and how to tune it.
+- [Configuration](docs/configuration.md) — the full `.augur.toml` reference (thresholds, weights, rules, exclude, codeowners) plus `--config` / `--no-config`.
+- [CLI reference](docs/cli.md) — every command and flag (`check`, `gate`, `calibrate`, `explain`) with examples, glob syntax, exit codes, and JSON shape.
+- [Coverage](docs/coverage.md) — supported formats (LCOV / Cobertura / JaCoCo / Go), auto-detection, and path-matching caveats.
+- [CI integration](docs/ci-integration.md) — self-hosted macOS, the `augur-gate` action, SARIF upload (GHAS caveat), the pre-commit hook, and the augur → attest trust pipeline.
 
 ## Roadmap
 

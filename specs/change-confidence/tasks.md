@@ -53,6 +53,14 @@
 - [x] Tests: glob `*`/`**`/`?`, anchoring, directory globs, non-matches; assessment exclusion + exclude-all-yields-no-changes + nil-filter behavior-preserving (63 tests total).
 - [x] Example `examples/09-exclude.sh` (excluding a vendored/generated path changes the assessment).
 
+## Done (v7)
+
+- [x] CODEOWNERS parser in `AugurKit` (`CodeOwners.swift`, Foundation-only, reusing `GlobPattern`): comments/blanks, `<pattern> @owner...`, gitignore-like pattern → glob translation, `owners(for:)` with last-match-wins; `standardLocations` (`.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS`).
+- [x] New `codeowners` signal in `RiskEngine.assessFile`: neutral (`0`) with no CODEOWNERS, `0.6` for an unowned file, `0` (owner listed) when owned. `Weights` gains `codeowners` (`0.08`); the seven prior weights scaled by `0.92` so the blend still sums to `1.0`. Optional `codeOwners:` threaded through both `Augur.assess(...)` overloads and `RiskEngine.assess(...)` (default `nil`).
+- [x] CLI: `check`/`gate` auto-discover CODEOWNERS at the standard locations; `--no-codeowners` disables; owner surfaced in the signal detail (human + JSON); `.augur.toml [weights] codeowners` parseable.
+- [x] Spec → v7 (Public API, invariants, behavioral examples, change log); `fledge spec check` 0 errors.
+- [x] Substantially expanded tests: CODEOWNERS semantics, engine codeowners signal + weights-sum + determinism (byte-identical JSON), parser/diff robustness (malformed/empty LCOV/Cobertura/JaCoCo/Go, binary/rename/unicode/space numstat, unified=0 edge cases, log parsing), pathological globs (63 → 114 tests).
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).

@@ -8,14 +8,20 @@
 ///     repository's own revert/hotfix record backs it.
 public struct RiskEngine: Sendable {
     /// Documented prior weights for each signal. Sum to 1.0.
+    ///
+    /// When the `codeowners` signal was added (v7) it claimed `0.08`; the seven
+    /// pre-existing weights were scaled by `0.92` (their original values times
+    /// `1 - 0.08`) so the blend still sums to `1.0` and their *relative*
+    /// proportions are unchanged.
     public struct Weights: Sendable, Equatable, Codable {
-        public var sensitivity = 0.22
-        public var testGap = 0.18
-        public var churn = 0.15
-        public var coupling = 0.13
-        public var diffShape = 0.12
-        public var ownership = 0.10
-        public var incident = 0.10
+        public var sensitivity = 0.2024
+        public var testGap = 0.1656
+        public var churn = 0.138
+        public var coupling = 0.1196
+        public var diffShape = 0.1104
+        public var ownership = 0.092
+        public var incident = 0.092
+        public var codeowners = 0.08
 
         public init() {}
     }
@@ -47,6 +53,7 @@ public struct RiskEngine: Sendable {
         history: HistorySnapshot,
         now: Int,
         coverage: CoverageReport? = nil,
+        codeOwners: CodeOwners? = nil,
         excludedPaths: [String] = []
     ) -> Assessment {
         let calibration = Calibration(
@@ -66,6 +73,7 @@ public struct RiskEngine: Sendable {
                 touchedTests: touchedTests,
                 calibration: calibration,
                 coverage: coverage,
+                codeOwners: codeOwners,
                 now: now
             )
         }
@@ -97,6 +105,7 @@ public struct RiskEngine: Sendable {
         touchedTests: Bool,
         calibration: Calibration,
         coverage: CoverageReport?,
+        codeOwners: CodeOwners?,
         now: Int
     ) -> FileAssessment {
         var signals: [Signal] = []
@@ -159,6 +168,20 @@ public struct RiskEngine: Sendable {
             ? "implicated in past reverts/hotfixes (calibration \(String(format: "%.2f", calibration.confidence)))"
             : "no incident history"
         signals.append(Signal(name: "incident", risk: incidentRisk, weight: weights.incident, detail: incidentDetail))
+
+        // CODEOWNERS: a changed file with no declared owner is a review-routing gap.
+        // Neutral (0) when no CODEOWNERS file is present, so repos without one are
+        // never penalized.
+        if let codeOwners {
+            let owners = codeOwners.owners(for: file.path)
+            if owners.isEmpty {
+                signals.append(Signal(name: "codeowners", risk: 0.6, weight: weights.codeowners, detail: "no CODEOWNERS owner"))
+            } else {
+                signals.append(Signal(name: "codeowners", risk: 0, weight: weights.codeowners, detail: "owned by \(owners.joined(separator: ", "))"))
+            }
+        } else {
+            signals.append(Signal(name: "codeowners", risk: 0, weight: weights.codeowners, detail: "no CODEOWNERS file"))
+        }
 
         let score = Self.weightedScore(signals)
         return FileAssessment(path: file.path, riskScore: score, signals: signals)

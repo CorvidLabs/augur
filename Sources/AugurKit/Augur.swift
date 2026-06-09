@@ -25,12 +25,16 @@ public struct Augur: Sendable {
     ///   - filter: An optional `PathFilter`; changed files matching any of its
     ///     patterns are dropped before scoring and reported in
     ///     `Assessment.excludedPaths`. `nil`/empty excludes nothing.
+    ///   - codeOwners: An optional parsed `CODEOWNERS`; when present, changed
+    ///     files with no declared owner raise the `codeowners` signal. `nil`
+    ///     leaves that signal neutral.
     /// - Returns: The assessment.
     public func assess(
         scope: DiffScope,
         now: Int = Int(Date().timeIntervalSince1970),
         coverage: CoverageReport? = nil,
-        filter: PathFilter? = nil
+        filter: PathFilter? = nil,
+        codeOwners: CodeOwners? = nil
     ) throws -> Assessment {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
@@ -43,6 +47,7 @@ public struct Augur: Sendable {
             history: history,
             now: now,
             coverage: coverage,
+            codeOwners: codeOwners,
             excludedPaths: excluded
         )
     }
@@ -56,13 +61,16 @@ public struct Augur: Sendable {
     ///   - coverage: An optional line-coverage report.
     ///   - filter: An optional `PathFilter`; matching files are dropped before
     ///     scoring and reported in `Assessment.excludedPaths`.
+    ///   - codeOwners: An optional parsed `CODEOWNERS` to drive the `codeowners`
+    ///     signal; `nil` leaves it neutral.
     /// - Returns: The assessment.
     public func assess(
         scope: DiffScope,
         history: HistorySnapshot,
         now: Int = Int(Date().timeIntervalSince1970),
         coverage: CoverageReport? = nil,
-        filter: PathFilter? = nil
+        filter: PathFilter? = nil,
+        codeOwners: CodeOwners? = nil
     ) throws -> Assessment {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
@@ -74,6 +82,7 @@ public struct Augur: Sendable {
             history: history,
             now: now,
             coverage: coverage,
+            codeOwners: codeOwners,
             excludedPaths: excluded
         )
     }
