@@ -28,6 +28,16 @@ Verify it:
 augur check --help
 ```
 
+### Try it instantly (no setup)
+
+Every script in [`examples/`](https://github.com/CorvidLabs/augur/tree/main/examples)
+builds the binary and runs it against a throwaway `/tmp` repo, so you get a real verdict
+in seconds:
+
+```sh
+bash examples/01-check.sh
+```
+
 ---
 
 ## 2. Get a verdict

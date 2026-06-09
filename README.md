@@ -7,17 +7,37 @@
 [![CI](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Faugur-blue)](https://corvidlabs.github.io/augur/)
 
+`augur` reads a diff and tells you how risky it is, and whether a human should look, as a
+deterministic, scriptable verdict: `proceed`, `review`, or `block`. macOS-only.
+
+## Quickstart
+
+### Install
+
+Build the release binary and drop it on your `PATH` (needs Swift 6 and `git`):
+
 ```sh
-swift build -c release   # then run: .build/release/augur check --range main..HEAD
+swift build -c release
+install -m 0755 .build/release/augur /usr/local/bin/augur
+# or, with fledge:
+fledge run install
 ```
 
-`augur` reads a diff and tells you how risky it is, and whether a human should look, as a
-deterministic, scriptable verdict: `proceed`, `review`, or `block`.
+### Try it instantly (no setup)
 
-It's built for the world where agents write most of the code: humans can't hand-review the
-volume, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is
-that missing primitive. It's language-agnostic, CI-agnostic, and **requires no API key and no
-LLM**. AI is optional and additive.
+Every script in [`examples/`](examples/README.md) builds the binary and runs against a
+throwaway `/tmp` repo, so you get a real verdict in seconds:
+
+```sh
+bash examples/01-check.sh
+```
+
+See [`examples/README.md`](examples/README.md) for the full catalog (gate exit codes,
+coverage, SARIF, the `augur → attest` trust loop, and more).
+
+### The core commands
+
+`augur check` reports a verdict over a range (it always exits `0`):
 
 ```
 $ augur check --range main..HEAD
@@ -25,18 +45,49 @@ $ augur check --range main..HEAD
 augur · main..HEAD
 
   verdict     [!] REVIEW
-  risk        [#########           ]  45/100
-  confidence  55/100
-  calibration history-backed (156 incidents / 500 commits)
+  risk        [#######             ]  37/100
+  confidence  63/100
+  calibration prior-only (0 incidents / 7 commits)
 
-  files (1), riskiest first:
-    !    45  src/auth/token.swift
+  files (2), riskiest first:
+    !    36  src/auth/token.swift
           · sensitivity: matches sensitive category 'auth'
+    !    35  db/migrations/001_add_secrets.sql
+          · sensitivity: matches sensitive category 'secrets'
 
   → an agent should request human review before merging
 ```
 
+`augur gate` exits **non-zero** when the verdict meets or exceeds a threshold, so a CI step
+or agent escalates instead of merging blind:
+
+```
+$ augur gate --range main..HEAD --threshold review
+augur gate · review (risk 37)
+$ echo $?
+1
+```
+
+`augur check --json` is the agent-friendly path (sorted-key JSON):
+
+```
+$ augur check --range main..HEAD --json | jq .verdict
+"review"
+```
+
+### Where next
+
+- [Docs site](https://corvidlabs.github.io/augur/): the rendered guides.
+- [`docs/cli.md`](docs/cli.md): every command, flag, exit code, and the JSON shape.
+- [`docs/configuration.md`](docs/configuration.md): the full `.augur.toml` reference.
+- [`examples/README.md`](examples/README.md): every runnable example, simplest first.
+
 ## Why it exists
+
+It's built for the world where agents write most of the code: humans can't hand-review the
+volume, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is
+that missing primitive. It's language-agnostic, CI-agnostic, and **requires no API key and no
+LLM**. AI is optional and additive.
 
 Agents made code cheap to produce. The scarce resource is now *trust*. `augur` turns the
 senior-engineer instinct ("this part is fine, that part needs a careful look") into a
@@ -69,17 +120,6 @@ Scoring has two layers:
    own revert/hotfix record backs it. Every assessment reports `calibration`
    (`prior-only` → `weak` → `history-backed`) so you know whether a score is guessing or
    grounded. The longer `augur` watches a repo, the sharper it gets.
-
-## Install
-
-```sh
-swift build -c release
-install -m 0755 .build/release/augur /usr/local/bin/augur
-# or, with fledge:
-fledge run install
-```
-
-Requires Swift 6 and `git` on `PATH`.
 
 ## Usage
 
