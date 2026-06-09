@@ -90,40 +90,65 @@ final class RobustnessTests: XCTestCase {
 
     // MARK: - Diff parsing: numstat
 
+    // The parser consumes the NUL-delimited output of `git diff --numstat -z`:
+    // a normal record is `added\tdeleted\t<path>\0`; a rename is
+    // `added\tdeleted\t\0<oldpath>\0<newpath>\0`. The empirical byte layout is
+    // exercised end-to-end by the on-disk integration tests below.
+
     func testEmptyNumstatYieldsNoFiles() {
         XCTAssertTrue(GitRepository.parseNumstat("").isEmpty)
-        XCTAssertTrue(GitRepository.parseNumstat("\n\n").isEmpty)
+        XCTAssertTrue(GitRepository.parseNumstat("\0\0").isEmpty)
     }
 
     func testNumstatBinaryFile() {
-        let files = GitRepository.parseNumstat("-\t-\tassets/logo.png\n")
+        let files = GitRepository.parseNumstat("-\t-\tassets/logo.png\0")
         XCTAssertEqual(files.count, 1)
         XCTAssertTrue(files[0].isBinary)
         XCTAssertEqual(files[0].linesAdded, 0)
     }
 
-    func testNumstatRenameWithBraces() {
-        // git numstat renders renames as `{old => new}` in the path field.
-        let files = GitRepository.parseNumstat("3\t1\tsrc/{old => new}/file.swift\n")
+    func testNumstatRenameResolvesToNewPath() {
+        // `-z` splits a rename into an empty path token followed by old then new.
+        let files = GitRepository.parseNumstat("1\t1\t\0src/old.swift\0src/new.swift\0")
         XCTAssertEqual(files.count, 1)
-        XCTAssertEqual(files[0].path, "src/{old => new}/file.swift")
-        XCTAssertEqual(files[0].linesAdded, 3)
+        XCTAssertEqual(files[0].path, "src/new.swift")
+        XCTAssertEqual(files[0].linesAdded, 1)
+        XCTAssertEqual(files[0].linesDeleted, 1)
+    }
+
+    func testNumstatPureRenameResolvesToNewPathWithZeroChurn() {
+        // A pure rename has 0 added / 0 deleted and must resolve to the new path,
+        // not look like a large new file.
+        let files = GitRepository.parseNumstat("0\t0\t\0src/old.swift\0src/renamed.swift\0")
+        XCTAssertEqual(files.count, 1)
+        XCTAssertEqual(files[0].path, "src/renamed.swift")
+        XCTAssertEqual(files[0].churnLines, 0)
+        XCTAssertFalse(files[0].isBinary)
+    }
+
+    func testNumstatMixedNormalAndRenameRecords() {
+        // A modified file, a rename, then a new file in one -z stream.
+        let stream = "0\t2\tsrc/old.swift\0" + "1\t1\t\0src/a.swift\0src/b.swift\0" + "3\t0\tsrc/new.swift\0"
+        let files = GitRepository.parseNumstat(stream)
+        XCTAssertEqual(files.map { $0.path }, ["src/old.swift", "src/b.swift", "src/new.swift"])
+        XCTAssertEqual(files.map { $0.linesAdded }, [0, 1, 3])
     }
 
     func testNumstatPathWithSpaces() {
-        let files = GitRepository.parseNumstat("5\t2\tsrc/my folder/a file.swift\n")
+        let files = GitRepository.parseNumstat("5\t2\tsrc/my folder/a file.swift\0")
         XCTAssertEqual(files.count, 1)
         XCTAssertEqual(files[0].path, "src/my folder/a file.swift")
     }
 
-    func testNumstatUnicodePath() {
-        let files = GitRepository.parseNumstat("1\t0\tsrc/café/naïve.swift\n")
+    func testNumstatUnicodePathVerbatim() {
+        // With `-z` (and core.quotepath=false) git emits verbatim UTF-8, never octal.
+        let files = GitRepository.parseNumstat("1\t0\tsrc/café/naïve.swift\0")
         XCTAssertEqual(files.count, 1)
         XCTAssertEqual(files[0].path, "src/café/naïve.swift")
     }
 
     func testNumstatHugeLineCounts() {
-        let files = GitRepository.parseNumstat("999999\t888888\tsrc/generated.swift\n")
+        let files = GitRepository.parseNumstat("999999\t888888\tsrc/generated.swift\0")
         XCTAssertEqual(files.count, 1)
         XCTAssertEqual(files[0].linesAdded, 999_999)
         XCTAssertEqual(files[0].churnLines, 1_888_887)

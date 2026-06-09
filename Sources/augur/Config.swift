@@ -147,7 +147,26 @@ enum ConfigLoader {
         } catch {
             throw ConfigError.invalid(path: path, underlying: String(describing: error))
         }
+        warnIfWeightsDoNotSumToOne(config)
         return (config.makeEngine(), config.resolvedExcludes(), path)
+    }
+
+    /// Tolerance (absolute) for the documented invariant that signal weights sum
+    /// to ~1.0.
+    static let weightSumTolerance = 0.01
+
+    /// Warns (without failing) when a custom `[weights]` block does not sum to
+    /// ~1.0, keeping the documented blend invariant honest. Only fires when the
+    /// block is present, so default configs stay silent.
+    static func warnIfWeightsDoNotSumToOne(_ config: AugurConfig) {
+        guard config.weights != nil else { return }
+        let resolved = config.resolvedWeights()
+        let total = resolved.sensitivity + resolved.testGap + resolved.churn + resolved.coupling
+            + resolved.diffShape + resolved.ownership + resolved.incident + resolved.codeowners
+        guard abs(total - 1.0) > weightSumTolerance else { return }
+        Diagnostics.warn(
+            "[weights] sum to \(String(format: "%.4f", total)), not 1.0; scores are blended as-is and may not be comparable to defaults."
+        )
     }
 }
 

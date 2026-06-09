@@ -42,4 +42,9 @@ enum Diagnostics {
     static func note(_ message: String) {
         FileHandle.standardError.write(Data("augur: \(message)\n".utf8))
     }
+
+    /// Writes a one-line `augur: warning:` message to stderr (non-fatal).
+    static func warn(_ message: String) {
+        FileHandle.standardError.write(Data("augur: warning: \(message)\n".utf8))
+    }
 }

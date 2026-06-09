@@ -59,7 +59,7 @@
 - [x] New `codeowners` signal in `RiskEngine.assessFile`: neutral (`0`) with no CODEOWNERS, `0.6` for an unowned file, `0` (owner listed) when owned. `Weights` gains `codeowners` (`0.08`); the seven prior weights scaled by `0.92` so the blend still sums to `1.0`. Optional `codeOwners:` threaded through both `Augur.assess(...)` overloads and `RiskEngine.assess(...)` (default `nil`).
 - [x] CLI: `check`/`gate` auto-discover CODEOWNERS at the standard locations; `--no-codeowners` disables; owner surfaced in the signal detail (human + JSON); `.augur.toml [weights] codeowners` parseable.
 - [x] Spec → v7 (Public API, invariants, behavioral examples, change log); `fledge spec check` 0 errors.
-- [x] Substantially expanded tests: CODEOWNERS semantics, engine codeowners signal + weights-sum + determinism (byte-identical JSON), parser/diff robustness (malformed/empty LCOV/Cobertura/JaCoCo/Go, binary/rename/unicode/space numstat, unified=0 edge cases, log parsing), pathological globs (63 → 114 tests).
+- [x] Substantially expanded tests: CODEOWNERS semantics, engine codeowners signal + weights-sum + determinism (byte-identical JSON), parser/diff robustness (malformed/empty LCOV/Cobertura/JaCoCo/Go, binary/space numstat, unified=0 edge cases, log parsing), pathological globs (63 → 114 tests).
 
 ## Done (v9)
 
@@ -68,6 +68,13 @@
 - [x] CI (`ci.yml`): meaningful PR risk range (`origin/<base>..HEAD` on `pull_request`, `HEAD~1..HEAD` on push) applied to the commit-status step and the new steps; `pull-requests: write` added; a PR-only step writes the markdown to `$GITHUB_STEP_SUMMARY` and posts/updates a sticky PR comment found via the `<!-- augur-report -->` marker (best-effort).
 - [x] Tests: heading per verdict, riskiest-first table order, top-signal selection, marker presence, row-cap overflow, pipe escaping, determinism, and a golden markdown snapshot (136 → 151 tests).
 - [x] Spec → v9 (Public API, behavioral example, change log); `fledge spec check` 0 errors. Docs: `docs/cli.md`, `docs/ci-integration.md`, README usage.
+
+## Done (v10)
+
+- [x] `GitRepository.changedFiles` reads `git diff --numstat -z`: NUL-delimited records disable path quoting and split renames into `added\tdeleted\t\0<oldpath>\0<newpath>`. `parseNumstat` now resolves a rename/copy to its real NEW path instead of git's synthetic `{old => new}` brace string, so CODEOWNERS, `--exclude`, coverage matching, and the SARIF `artifactLocation.uri` see the correct path. A pure rename (0 added / 0 deleted) resolves to the new path with zero churn (low risk), not a large new file.
+- [x] Every git invocation passes `-c core.quotepath=false`, so non-ASCII paths (e.g. `café.go`) round-trip as verbatim UTF-8 rather than octal-escaped (`"caf\303\251.go"`). This fixes CODEOWNERS / exclude / coverage matching and the `diff --unified=0` (`+++ b/<path>`) and `log --name-only` paths for unicode.
+- [x] Real on-disk integration tests (`GitRepositoryIntegrationTests`) drive the actual `GitRepository` against a temporary git repo: a content-tweaked rename and a pure rename resolve to the new path; a `café.go` round-trips verbatim and its CODEOWNERS owner matches; `addedLines` keys by the verbatim unicode path; a unicode path is excludable. The brace-asserting and pre-decoded-unicode unit tests were replaced with `-z`-format parser tests (151 → 158 tests).
+- [x] Quick wins: `--sarif` help lists all three exclusive formats; custom `[weights]` not summing to ~1.0 print a non-fatal stderr warning; recency over-claims corrected (no signal scores elapsed time; `now` is reserved/deterministic); CHANGELOG em-dash scrubbed.
 
 ## Next
 
