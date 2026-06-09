@@ -44,8 +44,19 @@ public struct GlobPattern: Sendable, Equatable {
 
     /// Lowers a glob to an anchored regular-expression source string.
     ///
-    /// The two-star token `**` is handled before single `*` so the separator
-    /// distinction is preserved; every literal run is regex-escaped.
+    /// Every `**` is translated so its match is anchored at a `/` boundary, never
+    /// mid-segment, so `vendor/**` cannot leak onto sibling paths like `vendors/x`
+    /// or `vendorize.go`. The recognized recursive tokens are:
+    ///  - A trailing or mid-path `/**` becomes `(/.*)?`: an optional, slash-rooted
+    ///    remainder. So `vendor/**` matches `vendor` and `vendor/a/b`, but not
+    ///    `vendors/x`; `a/**/b` matches `a/b` and `a/x/y/b`.
+    ///  - A leading or mid-path `**/` becomes `(.*/)?`: an optional, slash-ended
+    ///    prefix. So `**/foo` matches `foo` and `a/b/foo`, but not `barfoo`.
+    ///  - A bare `**` (no adjacent separator) becomes `.*`.
+    ///
+    /// A run of three or more consecutive `*` is collapsed to a single `**` so a
+    /// pathological pattern like `a/****/b` is well defined. Single `*` matches any
+    /// run except `/`; every literal run is regex-escaped.
     static func translate(_ glob: String) -> String {
         var out = "^"
         let scalars = Array(glob)
@@ -54,25 +65,33 @@ public struct GlobPattern: Sendable, Equatable {
             let character = scalars[index]
             switch character {
             case "/":
-                // A `/**` segment (slash, double-star) makes the slash optional so
-                // `vendor/**` also matches the bare directory `vendor`.
-                if index + 2 < scalars.count, scalars[index + 1] == "*", scalars[index + 2] == "*" {
-                    out += "/?.*"
-                    index += 3
+                // A `/**` token (slash + double-star) is the recursive descent of a
+                // directory: anchor the optional remainder at the `/` boundary so the
+                // match cannot bleed onto sibling names. `vendor/**` -> `vendor(/.*)?`.
+                let runAfterSlash = starRun(scalars, at: index + 1)
+                if runAfterSlash >= 2 {
+                    // `(/.*)?` is the optional slash-rooted remainder. Any following
+                    // separator stays literal, so `a/**/b` becomes `a(/.*)?/b`, which
+                    // matches `a/b` and `a/x/y/b` but never `ab`.
+                    out += "(/.*)?"
+                    index += 1 + runAfterSlash
                 } else {
                     out += "/"
                     index += 1
                 }
             case "*":
-                if index + 1 < scalars.count, scalars[index + 1] == "*" {
-                    // `**` — any characters including the separator.
-                    out += ".*"
-                    index += 2
-                    // Collapse a leading `**/` so it also matches zero path
-                    // segments (e.g. `**/x` matches the bare `x`).
+                let run = starRun(scalars, at: index)
+                if run >= 2 {
+                    index += run
+                    // A `**/` prefix is an optional, slash-ended run of segments so it
+                    // also matches zero segments (`**/x` matches the bare `x`) without
+                    // leaking mid-segment (`**/foo` does not match `barfoo`).
                     if index < scalars.count, scalars[index] == "/" {
-                        out += "/?"
+                        out += "(.*/)?"
                         index += 1
+                    } else {
+                        // A bare `**`: any characters including the separator.
+                        out += ".*"
                     }
                 } else {
                     // `*` — any characters except the separator.
@@ -89,6 +108,21 @@ public struct GlobPattern: Sendable, Equatable {
         }
         out += "$"
         return out
+    }
+
+    /// Counts the run of consecutive `*` characters starting at `index`.
+    /// - Parameters:
+    ///   - scalars: The glob characters.
+    ///   - index: The starting offset.
+    /// - Returns: The number of `*` characters at `index` (0 if none).
+    private static func starRun(_ scalars: [Character], at index: Int) -> Int {
+        var count = 0
+        var cursor = index
+        while cursor < scalars.count, scalars[cursor] == "*" {
+            count += 1
+            cursor += 1
+        }
+        return count
     }
 
     /// Escapes a single character for safe inclusion in a regular expression.

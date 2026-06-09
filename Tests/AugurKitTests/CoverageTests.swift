@@ -164,6 +164,22 @@ final class CoverageTests: XCTestCase {
         XCTAssertEqual(file.covered, [6, 7, 8])
     }
 
+    func testGoProfileSkipsImplausiblyLargeBlockSpan() throws {
+        // A crafted profile declaring a multi-billion-line block must not allocate
+        // a giant set or hang; the implausible block is skipped while a normal
+        // block in the same file is still parsed.
+        let profile = """
+        mode: set
+        evil.go:1.0,2000000000.0 3 1
+        evil.go:5.1,6.10 1 1
+        """
+        let report = CoverageParser.parseGoProfile(profile)
+        let file = try XCTUnwrap(report.files["evil.go"])
+        // Only the sane block survives; the oversized one is dropped.
+        XCTAssertEqual(file.instrumented, [5, 6])
+        XCTAssertEqual(file.covered, [5, 6])
+    }
+
     func testGoBlockParsing() {
         let block = CoverageParser.parseGoBlock("path/to/file.go:12.4,15.2 3 7")
         XCTAssertEqual(block?.path, "path/to/file.go")
