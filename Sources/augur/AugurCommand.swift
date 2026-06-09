@@ -107,25 +107,71 @@ struct Check: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
 
+    @Flag(name: .long, help: "Emit SARIF 2.1.0 (for GitHub code scanning). Mutually exclusive with --json.")
+    var sarif = false
+
+    @Option(name: .long, help: "Write SARIF to this file instead of stdout (implies --sarif).")
+    var sarifOut: String?
+
     @Flag(name: [.long, .customShort("v")], help: "Show every contributing signal.")
     var verbose = false
 
     @Flag(name: .long, help: "Reuse .augur/cache.json instead of re-walking git history.")
     var cached = false
 
+    /// Whether SARIF output was requested (explicitly, or implied by `--sarif-out`).
+    private var wantsSarif: Bool { sarif || sarifOut != nil }
+
+    func validate() throws {
+        if json && wantsSarif {
+            throw ValidationError("--json and --sarif are mutually exclusive.")
+        }
+    }
+
     func run() async throws {
         let (augur, diffScope) = try scope.makeAugur(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
         do {
             let assessment = try assess(augur, scope: diffScope, coverage: coverage)
-            if json {
+            if wantsSarif {
+                try emitSarif(assessment, augur: augur, scope: diffScope)
+            } else if json {
                 print(try assessment.jsonString())
             } else {
                 print(Reporter.render(assessment, verbose: verbose))
             }
         } catch AugurError.noChanges {
-            if json { print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[]}") }
-            else { print("augur · no changes to assess") }
+            if wantsSarif {
+                let empty = Assessment(
+                    scope: diffScope.label,
+                    riskScore: 0,
+                    verdict: .proceed,
+                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
+                    files: []
+                )
+                try emitSarif(empty, augur: augur, scope: diffScope)
+            } else if json {
+                print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[]}")
+            } else {
+                print("augur · no changes to assess")
+            }
+        }
+    }
+
+    /// Builds a SARIF report from the assessment and writes it to the chosen sink.
+    private func emitSarif(_ assessment: Assessment, augur: Augur, scope diffScope: DiffScope) throws {
+        let added = (try? augur.addedLines(in: diffScope)) ?? [:]
+        let report = SarifReport(
+            from: assessment,
+            toolVersion: AugurCommand.configuration.version,
+            addedLinesByPath: added
+        )
+        let payload = try report.jsonString()
+        if let sarifOut {
+            try payload.write(toFile: sarifOut, atomically: true, encoding: .utf8)
+            Diagnostics.note("sarif: wrote \(sarifOut)")
+        } else {
+            print(payload)
         }
     }
 

@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 3
+version: 4
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -11,6 +11,7 @@ files:
   - Sources/AugurKit/Augur.swift
   - Sources/AugurKit/Reporter.swift
   - Sources/AugurKit/Coverage.swift
+  - Sources/AugurKit/Sarif.swift
 db_tables: []
 depends_on: []
 ---
@@ -66,6 +67,17 @@ The scoring has two layers:
 | `RepositoryProbe.addedLines(in:)` | Added (new-revision) line numbers per file in a scope; default `[:]`. `GitRepository` parses `git diff --unified=0`. |
 | `Augur.calibrate()` | Walk history once and return a `CalibrationCache` pinned to the current `HEAD`. |
 | `Augur.currentHead()` | The current `HEAD` SHA of the underlying repository. |
+| `Augur.addedLines(in:)` | Added (new-revision) line numbers per changed file in a scope (passthrough to the probe), used to place SARIF result regions. |
+
+### SARIF Output
+
+| Export | Description |
+|--------|-------------|
+| `SarifReport.init(from:toolVersion:addedLinesByPath:)` | Project an `Assessment` into a SARIF 2.1.0 report: one `run`, one `result` per file, regioned on the first added line when known. |
+| `SarifReport.jsonString()` / `jsonData()` | Stable, sorted-key SARIF JSON, mirroring the `Assessment` JSON renderers. |
+| `SarifReport.Level.from(verdict:)` | Map a `Verdict` to a SARIF level (`block → error`, `review → warning`, `proceed → note`). |
+| `SarifReport.schemaURL` / `sarifVersion` / `informationURI` / `ruleID` | The SARIF 2.1.0 schema URL, the format version (`"2.1.0"`), augur's project URL, and the single rule id (`augur/change-risk`). |
+| `SarifReport` (+ `Run`, `Tool`, `Driver`, `ReportingDescriptor`, `Result`, `Level`, `Message`, `Location`, `PhysicalLocation`, `ArtifactLocation`, `Region`, `Properties`) | The Foundation-only `Codable` SARIF 2.1.0 subset augur emits. |
 
 ### Sensitivity
 
@@ -121,6 +133,8 @@ The scoring has two layers:
 - `CoverageQuery` counts only *instrumented* changed lines: a changed line the tool never instrumented contributes to neither `covered` nor `instrumented`, and `coveredFraction` is `nil` when `instrumented == 0`.
 - Coverage path matching is by normalized longest-suffix at component boundaries; exact (normalized) matches win, ties break by shorter then lexicographically-smaller reported path. Diff/coverage prefix differences are tolerated; identical suffixes across distinct files are ambiguous (documented limitation).
 - `Augur.assess` is pure with respect to an injected `now`, enabling reproducible tests.
+- SARIF output is a lossless-enough projection of an `Assessment`: `SarifReport(from:)` emits exactly one `run` with one `result` per assessed file (in assessment order), `version == "2.1.0"`, and one reporting descriptor (`augur/change-risk`). Each result's `level` is `SarifReport.Level.from(verdict:)` under the assessment's thresholds — `block → error`, `review → warning`, `proceed → note` — and carries `riskScore`/`confidence`/`verdict` in `result.properties`. A result's `region.startLine` is the file's smallest added line when `addedLines` is non-empty, otherwise the region is omitted.
+- SARIF JSON is deterministic (sorted keys, no `Date`/randomness) and round-trips: `SarifReport.jsonData()` decodes back to an equal `SarifReport`. SARIF lives in `AugurKit` and uses Foundation `Codable` only — no third-party dependency.
 
 ## Behavioral Examples
 
@@ -136,6 +150,7 @@ The scoring has two layers:
 - A changed code file absent from the supplied coverage report scores `test-gap` risk `0.7` ("not in coverage report").
 - Parsing LCOV `SF:`/`DA:` records and Cobertura `<class filename><lines><line number hits>` yields, per file, the instrumented and covered line-number sets; `query(path:changedLines:)` restricts counts to instrumented changed lines.
 - A coverage path `/build/checkout/Sources/App/Service.swift` matches the diff path `Sources/App/Service.swift` by longest suffix; a path sharing no trailing component does not match.
+- An assessment with a `block`, a `review`, and a `proceed` file projects to a `SarifReport` with `version == "2.1.0"`, three results whose `level`s are `error`, `warning`, and `note` respectively, each citing rule `augur/change-risk`; a file with added lines `[42, 7, 99]` gets `region.startLine == 7`, a file with no added lines gets no region, and the SARIF JSON decodes back to an equal report.
 
 ## Error Cases
 
@@ -152,6 +167,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v4: SARIF 2.1.0 output (`Sarif.swift`). New Foundation-only `Codable` `SarifReport` model (a minimal valid SARIF 2.1.0 subset) with `init(from:toolVersion:addedLinesByPath:)` projecting an `Assessment` into one `run` carrying one `result` per file under a single `augur/change-risk` reporting descriptor; result `level` is mapped from each file's verdict (`block → error`, `review → warning`, `proceed → note`), `region.startLine` is the file's first added line when known, and `riskScore`/`confidence`/`verdict` go in `result.properties`. `SarifReport.jsonString()`/`jsonData()` mirror the `Assessment` renderers (sorted-key, deterministic). `Augur.addedLines(in:)` is exposed as a probe passthrough so the CLI can place regions. CLI adds `--sarif` and `--sarif-out <path>` to `check` (mutually exclusive with `--json`; `--sarif-out` implies `--sarif`). `AugurKit` remains free of third-party dependencies.
 - v3: Per-line coverage ingestion (`Coverage.swift`). New `CoverageReport` / `CoverageReport.FileCoverage` / `CoverageQuery` types and a Foundation-only `CoverageParser` (LCOV + Cobertura XML via `XMLParser`, with format auto-detection and `load(path:)`). `ChangedFile` gains `addedLines` (default empty, back-compatible). `RepositoryProbe` gains `addedLines(in:)` (default `[:]`); `GitRepository` parses `git diff --unified=0` hunk headers to populate it. Optional `coverage:` parameter threaded through `RiskEngine.assess(...)` and both `Augur.assess(...)` overloads (default `nil`); when supplied, the test-gap signal becomes `1 - covered/instrumented` over a file's instrumented changed lines (absent file → `0.7`), otherwise the original heuristic is unchanged. CLI adds `--coverage <path>` and `--no-coverage` to `check`/`gate`, with auto-detection of `lcov.info` / `coverage.xml` at the repo root. A composite `action.yml` ("augur gate") builds augur from its own checkout and gates on self-hosted macOS. `AugurKit` remains free of third-party dependencies.
 - v2: Configurable verdict thresholds via `Thresholds` (engine + `Verdict.from(riskScore:thresholds:)`), threaded through `RiskEngine.init(weights:rules:thresholds:)` and surfaced on `Assessment.thresholds`. `Weights` is now `Codable`. Added `CalibrationCache` (a `Codable` projection of `HistorySnapshot`) with `HistorySnapshot.init(cache:)` / `makeCache(head:)`, `Augur.calibrate()` / `assess(scope:history:now:)` / `currentHead()`, and `RepositoryProbe.headSHA()`. `topPartner` now breaks ties deterministically by partner path. CLI adds `.augur.toml` config (parsed in the CLI layer only), the `calibrate` command, `check --cached`, and `--config` / `--no-config`. `AugurKit` remains free of third-party dependencies.
 - v1: Initial change-confidence engine — deterministic signals (sensitivity, test-gap, churn, coupling, diff-shape, ownership, incident), two-layer prior + history calibration, JSON and human reporters, `check`/`gate`/`explain` CLI.

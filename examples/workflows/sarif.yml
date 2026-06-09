@@ -1,0 +1,73 @@
+# sarif.yml — emit augur's risk verdict as SARIF and upload it to GitHub code
+# scanning so findings annotate the pull request inline.
+#
+# On every pull request it builds augur from a checkout, runs
+# `augur check --sarif --sarif-out augur.sarif`, then uploads the SARIF with
+# github/codeql-action/upload-sarif. Each result becomes an inline annotation on
+# the changed file at its first added line (level: block -> error, review ->
+# warning, proceed -> note).
+#
+# HONEST SCOPE / CAVEATS
+#   * macOS-only: it runs on CorvidLabs' self-hosted macOS ARM64 runners.
+#   * It builds augur from a checkout (no published binary yet) — the same
+#     deferred-packaging caveat as trust.yml.
+#   * GitHub code scanning upload requires GitHub Advanced Security (GHAS) on a
+#     PRIVATE repo. Without GHAS the upload-sarif step fails with a 403. It works
+#     out of the box once the repo is PUBLIC, or with GHAS enabled on a private
+#     repo. `continue-on-error: true` keeps the job green while that is pending;
+#     remove it once GHAS/public is in place to make missing uploads visible.
+#
+# To use this in another repo: copy it to .github/workflows/sarif.yml and pin
+# the augur ref.
+
+name: sarif
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write   # required by upload-sarif
+
+jobs:
+  sarif:
+    name: augur sarif
+    runs-on: [self-hosted, macOS]
+    steps:
+      # The repository being scanned. fetch-depth: 0 so the range has history.
+      - name: Checkout (with history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Build augur from a checkout (no published binary yet).
+      - name: Checkout augur
+        uses: actions/checkout@v4
+        with:
+          repository: CorvidLabs/augur
+          ref: main            # pin to a tag/SHA for reproducible runs
+          path: .augur-src
+
+      - name: Build augur (release)
+        shell: bash
+        working-directory: .augur-src
+        run: swift build -c release
+
+      # Emit SARIF for the PR range. This never fails the build on its own; the
+      # verdict is carried in the SARIF result levels, not the exit code. Pair
+      # with `augur gate` (see trust.yml) if you also want a hard gate.
+      - name: augur check --sarif
+        shell: bash
+        run: |
+          .augur-src/.build/release/augur check \
+            --range "origin/${{ github.base_ref }}..HEAD" \
+            --sarif --sarif-out augur.sarif
+            # --coverage lcov.info   # optional: sharpen the test-gap signal
+
+      # Upload to code scanning. Requires GHAS on a private repo (see CAVEATS).
+      # continue-on-error keeps the job green until GHAS/public is in place.
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: augur.sarif
+          category: augur
