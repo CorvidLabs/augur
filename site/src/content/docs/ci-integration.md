@@ -48,7 +48,7 @@ jobs:
 |-------|---------|-------------|
 | `range` | `origin/main..HEAD` | Git range to assess. |
 | `threshold` | `block` | Fail at or above this verdict (`proceed` / `review` / `block`). |
-| `coverage` | *(none)* | Optional path to an LCOV `.info` or Cobertura `.xml` report. |
+| `coverage` | *(none)* | Optional path to a coverage report (LCOV `.info`, Cobertura/JaCoCo `.xml`, or Go `.out` coverprofile). |
 | `working-directory` | `.` | Repository root to run in. |
 
 **Deferred:** the action builds augur from *its own checkout*, which is correct
