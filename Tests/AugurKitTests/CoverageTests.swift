@@ -85,12 +85,108 @@ final class CoverageTests: XCTestCase {
         XCTAssertEqual(report.files["src/Empty.swift"]?.covered, [])
     }
 
+    // MARK: - JaCoCo parsing
+
+    func testJaCoCoParsing() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <report name="app">
+          <package name="com/foo">
+            <sourcefile name="Bar.kt">
+              <line nr="10" mi="0" ci="4"/>
+              <line nr="11" mi="3" ci="0"/>
+              <line nr="12" mi="0" ci="2"/>
+            </sourcefile>
+            <sourcefile name="Empty.kt">
+              <line nr="1" mi="2" ci="0"/>
+            </sourcefile>
+          </package>
+        </report>
+        """
+        let report = try CoverageParser.parse(contents: xml, path: "jacoco.xml")
+        // Path is assembled from package@name + "/" + sourcefile@name.
+        let bar = try XCTUnwrap(report.files["com/foo/Bar.kt"])
+        XCTAssertEqual(bar.instrumented, [10, 11, 12])
+        // Covered when ci > 0 (10 and 12); 11 has ci=0 so it is uncovered.
+        XCTAssertEqual(bar.covered, [10, 12])
+        let empty = try XCTUnwrap(report.files["com/foo/Empty.kt"])
+        XCTAssertEqual(empty.instrumented, [1])
+        XCTAssertTrue(empty.covered.isEmpty)
+    }
+
+    func testJaCoCoEmptyPackagePath() throws {
+        // A package with an empty name yields the bare sourcefile name.
+        let xml = """
+        <report>
+          <package name="">
+            <sourcefile name="Top.kt">
+              <line nr="1" mi="0" ci="1"/>
+            </sourcefile>
+          </package>
+        </report>
+        """
+        let report = try CoverageParser.parseJaCoCo(xml)
+        let top = try XCTUnwrap(report.files["Top.kt"])
+        XCTAssertEqual(top.instrumented, [1])
+        XCTAssertEqual(top.covered, [1])
+    }
+
+    // MARK: - Go coverprofile parsing
+
+    func testGoProfileParsing() throws {
+        // Two blocks for the same file: lines 5...7 covered (count 3), 9...10 not.
+        let profile = """
+        mode: set
+        github.com/acme/app/calc.go:5.2,7.16 2 3
+        github.com/acme/app/calc.go:9.2,10.10 1 0
+        github.com/acme/app/other.go:1.1,1.20 1 1
+        """
+        let report = try CoverageParser.parse(contents: profile, path: "cover.out")
+        let calc = try XCTUnwrap(report.files["github.com/acme/app/calc.go"])
+        XCTAssertEqual(calc.instrumented, [5, 6, 7, 9, 10])
+        XCTAssertEqual(calc.covered, [5, 6, 7])
+        let other = try XCTUnwrap(report.files["github.com/acme/app/other.go"])
+        XCTAssertEqual(other.instrumented, [1])
+        XCTAssertEqual(other.covered, [1])
+    }
+
+    func testGoProfileLineCoveredByAnyBlock() throws {
+        // Overlapping blocks: line 6 is in an uncovered block AND a covered one;
+        // covered wins because ANY covering block with count>0 marks it covered.
+        let profile = """
+        mode: count
+        a/x.go:6.1,6.10 1 0
+        a/x.go:6.1,8.10 1 4
+        """
+        let report = CoverageParser.parseGoProfile(profile)
+        let file = try XCTUnwrap(report.files["a/x.go"])
+        XCTAssertEqual(file.instrumented, [6, 7, 8])
+        XCTAssertEqual(file.covered, [6, 7, 8])
+    }
+
+    func testGoBlockParsing() {
+        let block = CoverageParser.parseGoBlock("path/to/file.go:12.4,15.2 3 7")
+        XCTAssertEqual(block?.path, "path/to/file.go")
+        XCTAssertEqual(block?.startLine, 12)
+        XCTAssertEqual(block?.endLine, 15)
+        XCTAssertEqual(block?.count, 7)
+        // Malformed lines are rejected.
+        XCTAssertNil(CoverageParser.parseGoBlock("garbage without colon"))
+    }
+
     func testFormatDetection() {
         XCTAssertEqual(CoverageParser.detectFormat(path: "x.info", contents: ""), .lcov)
         XCTAssertEqual(CoverageParser.detectFormat(path: "x.xml", contents: ""), .cobertura)
         XCTAssertEqual(CoverageParser.detectFormat(path: "", contents: "<?xml version=\"1.0\"?><coverage/>"), .cobertura)
         XCTAssertEqual(CoverageParser.detectFormat(path: "", contents: "SF:a.swift\nDA:1,1\n"), .lcov)
         XCTAssertNil(CoverageParser.detectFormat(path: "x.txt", contents: "hello"))
+        // JaCoCo: <report> + <sourcefile> markers, even with an .xml extension.
+        let jacoco = "<?xml version=\"1.0\"?><report><package name=\"p\"><sourcefile name=\"A.kt\"/></package></report>"
+        XCTAssertEqual(CoverageParser.detectFormat(path: "jacoco.xml", contents: jacoco), .jacoco)
+        XCTAssertEqual(CoverageParser.detectFormat(path: "", contents: jacoco), .jacoco)
+        // Go coverprofile: first non-empty line begins "mode:".
+        XCTAssertEqual(CoverageParser.detectFormat(path: "cover.out", contents: "mode: set\na/b.go:1.1,2.2 1 1\n"), .go)
+        XCTAssertEqual(CoverageParser.detectFormat(path: "", contents: "mode: atomic\na.go:1.1,1.2 1 0\n"), .go)
     }
 
     // MARK: - Suffix path matching
@@ -184,6 +280,66 @@ final class CoverageTests: XCTestCase {
         XCTAssertEqual(coveredGap.risk, 0, accuracy: 0.0001)
         XCTAssertEqual(uncoveredGap.risk, 1, accuracy: 0.0001)
         XCTAssertLessThan(coveredFile.riskScore, uncoveredFile.riskScore)
+        XCTAssertTrue(coveredGap.detail.contains("3/3"))
+    }
+
+    func testJaCoCoCoveredChangedLinesLowerTestGapRisk() throws {
+        // The diff path is repo-relative (com/foo/Bar.kt); JaCoCo assembles the
+        // same path from package + sourcefile, so suffix matching reconciles them.
+        let changed = [ChangedFile(path: "com/foo/Bar.kt", linesAdded: 3, linesDeleted: 0, isBinary: false, addedLines: [10, 11, 12])]
+        let probe = CoverageFixtureProbe(changed: changed, commits: manyBenignCommits())
+
+        let coveredXML = """
+        <report><package name="com/foo"><sourcefile name="Bar.kt">
+          <line nr="10" mi="0" ci="4"/>
+          <line nr="11" mi="0" ci="2"/>
+          <line nr="12" mi="0" ci="1"/>
+        </sourcefile></package></report>
+        """
+        let uncoveredXML = """
+        <report><package name="com/foo"><sourcefile name="Bar.kt">
+          <line nr="10" mi="4" ci="0"/>
+          <line nr="11" mi="2" ci="0"/>
+          <line nr="12" mi="1" ci="0"/>
+        </sourcefile></package></report>
+        """
+        let coveredReport = try CoverageParser.parseJaCoCo(coveredXML)
+        let uncoveredReport = try CoverageParser.parseJaCoCo(uncoveredXML)
+
+        let covered = try Augur(probe: probe).assess(scope: .workingTree, now: now, coverage: coveredReport)
+        let uncovered = try Augur(probe: probe).assess(scope: .workingTree, now: now, coverage: uncoveredReport)
+
+        let coveredGap = try XCTUnwrap(covered.files.first?.signals.first { $0.name == "test-gap" })
+        let uncoveredGap = try XCTUnwrap(uncovered.files.first?.signals.first { $0.name == "test-gap" })
+        XCTAssertEqual(coveredGap.risk, 0, accuracy: 0.0001)
+        XCTAssertEqual(uncoveredGap.risk, 1, accuracy: 0.0001)
+        XCTAssertLessThan(try XCTUnwrap(covered.files.first).riskScore, try XCTUnwrap(uncovered.files.first).riskScore)
+        XCTAssertTrue(coveredGap.detail.contains("3/3"))
+    }
+
+    func testGoProfileCoveredChangedLinesLowerTestGapRisk() throws {
+        let changed = [ChangedFile(path: "calc.go", linesAdded: 3, linesDeleted: 0, isBinary: false, addedLines: [5, 6, 7])]
+        let probe = CoverageFixtureProbe(changed: changed, commits: manyBenignCommits())
+
+        let coveredProfile = """
+        mode: set
+        github.com/acme/app/calc.go:5.2,7.16 3 4
+        """
+        let uncoveredProfile = """
+        mode: set
+        github.com/acme/app/calc.go:5.2,7.16 3 0
+        """
+        let coveredReport = CoverageParser.parseGoProfile(coveredProfile)
+        let uncoveredReport = CoverageParser.parseGoProfile(uncoveredProfile)
+
+        let covered = try Augur(probe: probe).assess(scope: .workingTree, now: now, coverage: coveredReport)
+        let uncovered = try Augur(probe: probe).assess(scope: .workingTree, now: now, coverage: uncoveredReport)
+
+        let coveredGap = try XCTUnwrap(covered.files.first?.signals.first { $0.name == "test-gap" })
+        let uncoveredGap = try XCTUnwrap(uncovered.files.first?.signals.first { $0.name == "test-gap" })
+        XCTAssertEqual(coveredGap.risk, 0, accuracy: 0.0001)
+        XCTAssertEqual(uncoveredGap.risk, 1, accuracy: 0.0001)
+        XCTAssertLessThan(try XCTUnwrap(covered.files.first).riskScore, try XCTUnwrap(uncovered.files.first).riskScore)
         XCTAssertTrue(coveredGap.detail.contains("3/3"))
     }
 

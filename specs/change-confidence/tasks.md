@@ -37,6 +37,14 @@
 - [x] Tests: level mapping, result count, region from `addedLines`, deterministic JSON round-trip.
 - [x] Example `examples/07-sarif.sh` + reusable `examples/workflows/sarif.yml` (with `upload-sarif` and the GHAS-on-private caveat).
 
+## Done (v5)
+
+- [x] JaCoCo XML ingestion (`parseJaCoCo`, Foundation `XMLParser`): `<line nr mi ci>` under `<package><sourcefile>`; instrumented when a `line` exists, covered when `ci > 0`; path = `package@name`/`sourcefile@name`.
+- [x] Go coverprofile ingestion (`parseGoProfile`, text): `mode:` header then `path:start.col,end.col numStmts count` blocks; lines `start...end` instrumented, covered when any covering block has `count > 0`.
+- [x] `CoverageParser.Format` gains `jacoco` / `go`; `detectFormat` recognizes both (markers / `mode:` / extensions) with LCOV + Cobertura unchanged. `--coverage` accepts all four; auto-detect adds `jacoco.xml` / `cover.out` / `coverage.out`.
+- [x] Tests: JaCoCo + Go parsing (counts, path assembly, multi/overlapping blocks), `detectFormat`, and covered-vs-uncovered scoring under each new format (46 tests total).
+- [x] Example `examples/08-coverage-formats.sh` demonstrating JaCoCo and Go coverprofile lowering risk on covered changed lines.
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).
