@@ -217,6 +217,9 @@ public struct Assessment: Sendable, Equatable, Codable {
     public let calibration: Calibration
     public let thresholds: Thresholds
     public let files: [FileAssessment]
+    /// Paths dropped from the assessment by a `PathFilter` before scoring,
+    /// sorted for stable output. Empty when no exclusions applied.
+    public let excludedPaths: [String]
 
     public init(
         scope: String,
@@ -224,7 +227,8 @@ public struct Assessment: Sendable, Equatable, Codable {
         verdict: Verdict,
         calibration: Calibration,
         thresholds: Thresholds = .default,
-        files: [FileAssessment]
+        files: [FileAssessment],
+        excludedPaths: [String] = []
     ) {
         self.scope = scope
         self.riskScore = riskScore
@@ -232,9 +236,13 @@ public struct Assessment: Sendable, Equatable, Codable {
         self.calibration = calibration
         self.thresholds = thresholds
         self.files = files
+        self.excludedPaths = excludedPaths
     }
 
     public var confidence: Double { 100 - riskScore }
+
+    /// The number of files excluded from this assessment.
+    public var excludedCount: Int { excludedPaths.count }
 }
 
 // MARK: - Errors

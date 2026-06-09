@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 5
+version: 6
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -12,6 +12,7 @@ files:
   - Sources/AugurKit/Reporter.swift
   - Sources/AugurKit/Coverage.swift
   - Sources/AugurKit/Sarif.swift
+  - Sources/AugurKit/Glob.swift
 db_tables: []
 depends_on: []
 ---
@@ -40,7 +41,7 @@ The scoring has two layers:
 | Export | Description |
 |--------|-------------|
 | `Augur.init(probe:engine:historyLimit:)` | Construct the facade over a `RepositoryProbe`. |
-| `Augur.assess(scope:now:coverage:)` | Probe the repository and return an `Assessment` for a `DiffScope`; an optional `CoverageReport` sharpens the test-gap signal per changed line. |
+| `Augur.assess(scope:now:coverage:filter:)` | Probe the repository and return an `Assessment` for a `DiffScope`; an optional `CoverageReport` sharpens the test-gap signal per changed line, and an optional `PathFilter` drops matching files before scoring. |
 | `Assessment.jsonString()` | Render the assessment as stable, sorted-key JSON for agents. |
 | `Assessment.jsonData()` | Same as `jsonString()` but returns `Data`. |
 | `Reporter.render(_:verbose:)` | Render an `Assessment` as human-readable terminal text. |
@@ -50,7 +51,7 @@ The scoring has two layers:
 | Export | Description |
 |--------|-------------|
 | `RiskEngine.init(weights:rules:thresholds:)` | Construct the engine with prior weights, sensitivity rules, and verdict thresholds. |
-| `RiskEngine.assess(scope:changedFiles:history:now:coverage:)` | Pure scoring over an explicit change surface and history, with an optional `CoverageReport`. |
+| `RiskEngine.assess(scope:changedFiles:history:now:coverage:excludedPaths:)` | Pure scoring over an explicit change surface and history, with an optional `CoverageReport`; `excludedPaths` (already filtered out by the caller) is recorded on the `Assessment`. |
 | `RiskEngine.Weights` | Documented prior weights for each signal (sum to 1.0); `Codable`. |
 | `RiskEngine.calibrationConfidence(totalCommits:incidentCommits:)` | Static calibration-confidence function (0...1). |
 
@@ -63,7 +64,7 @@ The scoring has two layers:
 | `HistorySnapshot.init(commits:)` | Derives churn, recency, ownership, coupling, and incidents from commits. |
 | `HistorySnapshot.init(cache:)` | Rebuilds an equivalent snapshot from a `CalibrationCache` without re-walking `git log`. |
 | `HistorySnapshot.makeCache(head:)` | Produces a serializable `CalibrationCache` pinned to a `HEAD` SHA. |
-| `Augur.assess(scope:history:now:coverage:)` | Assess using a pre-built snapshot (e.g. from a cache), skipping the log walk; optional `CoverageReport`. |
+| `Augur.assess(scope:history:now:coverage:filter:)` | Assess using a pre-built snapshot (e.g. from a cache), skipping the log walk; optional `CoverageReport` and `PathFilter`. |
 | `RepositoryProbe.addedLines(in:)` | Added (new-revision) line numbers per file in a scope; default `[:]`. `GitRepository` parses `git diff --unified=0`. |
 | `Augur.calibrate()` | Walk history once and return a `CalibrationCache` pinned to the current `HEAD`. |
 | `Augur.currentHead()` | The current `HEAD` SHA of the underlying repository. |
@@ -87,6 +88,13 @@ The scoring has two layers:
 | `SensitivityRuleset.default` | Built-in rules: secrets, auth, crypto, payments, migration, infra, ci, dependencies. |
 | `SensitivityRuleset.match(_:rules:)` | Highest-severity matching rule for a path, if any. |
 | `TestHeuristics.isTestFile(_:)` | Language-agnostic test-file detection. |
+
+### Path Exclusion
+
+| Export | Description |
+|--------|-------------|
+| `GlobPattern` | A `Sendable` compiled glob matched against forward-slash paths: `*` (any chars except `/`), `**` (any chars incl `/`, matching zero or more segments), `?` (one char). Anchored to the whole path; `matches(_:)` reports a match. Foundation-only (compiled to `NSRegularExpression`); other regex metacharacters are escaped to match literally. |
+| `PathFilter` | A `Sendable` wrapper over `[GlobPattern]`; `init(globs:)` / `init(patterns:)`, `excludes(_ path:)` (true when any pattern matches), and `isEmpty`. An empty filter excludes nothing. |
 
 ### Coverage
 
@@ -114,7 +122,7 @@ The scoring has two layers:
 | `FileAssessment` | Per-file `riskScore` (0...100), `confidence`, `verdict`, `verdict(thresholds:)`, and `signals`. |
 | `Calibration` | `confidence` (0...1), `totalCommits`, `incidentCommits`, and a `band`. |
 | `CalibrationCache` | `Codable` projection of a `HistorySnapshot` pinned to a `head` SHA; `confidence`, `band`, `jsonData()`, `decoded(from:)`. |
-| `Assessment` | Overall `riskScore`, `verdict`, `calibration`, `thresholds`, and per-file results. |
+| `Assessment` | Overall `riskScore`, `verdict`, `calibration`, `thresholds`, per-file results, and `excludedPaths` (sorted paths dropped by a `PathFilter`; `excludedCount` is its size). |
 | `AugurError` | `notARepository`, `git`, `noChanges`. |
 
 ## Invariants
@@ -133,6 +141,8 @@ The scoring has two layers:
 - `CoverageQuery` counts only *instrumented* changed lines: a changed line the tool never instrumented contributes to neither `covered` nor `instrumented`, and `coveredFraction` is `nil` when `instrumented == 0`.
 - Coverage path matching is by normalized longest-suffix at component boundaries; exact (normalized) matches win, ties break by shorter then lexicographically-smaller reported path. Diff/coverage prefix differences are tolerated; identical suffixes across distinct files are ambiguous (documented limitation).
 - `Augur.assess` is pure with respect to an injected `now`, enabling reproducible tests.
+- Path exclusion happens **before** scoring: a changed file whose path matches any `PathFilter` pattern is removed from the change surface, so it appears in neither `Assessment.files` nor any signal, and is recorded in `Assessment.excludedPaths` (sorted). A `nil` or empty filter excludes nothing and yields an `Assessment` identical to passing no filter (`excludedPaths == []`). Exclusion is deterministic — `GlobPattern` matching uses no `Date`/randomness — and `GlobPattern`/`PathFilter` are Foundation-only (no third-party dependency). When *every* changed file is excluded, `assess` throws `AugurError.noChanges` (the CLI treats this as a clean `proceed`).
+- `GlobPattern` is whole-path anchored: `*` matches within a single path segment (never `/`), `**` matches across segments and also zero segments (so `vendor/**` matches the bare `vendor`), and `?` matches exactly one character. Paths are normalized (leading `./`, repeated and trailing slashes) before matching.
 - SARIF output is a lossless-enough projection of an `Assessment`: `SarifReport(from:)` emits exactly one `run` with one `result` per assessed file (in assessment order), `version == "2.1.0"`, and one reporting descriptor (`augur/change-risk`). Each result's `level` is `SarifReport.Level.from(verdict:)` under the assessment's thresholds — `block → error`, `review → warning`, `proceed → note` — and carries `riskScore`/`confidence`/`verdict` in `result.properties`. A result's `region.startLine` is the file's smallest added line when `addedLines` is non-empty, otherwise the region is omitted.
 - SARIF JSON is deterministic (sorted keys, no `Date`/randomness) and round-trips: `SarifReport.jsonData()` decodes back to an equal `SarifReport`. SARIF lives in `AugurKit` and uses Foundation `Codable` only — no third-party dependency.
 
@@ -153,6 +163,7 @@ The scoring has two layers:
 - Parsing a Go coverprofile (`mode:` header then `path:startLine.col,endLine.col numStmts count` blocks) instruments every line in `startLine...endLine` and covers a line when *any* block over it has `count > 0`; accumulated per file path.
 - `detectFormat` recognizes JaCoCo XML (a `<report>`+`<sourcefile>` pairing or a `jacoco` marker, even with an `.xml` extension) and a Go coverprofile (first non-empty line begins `mode:`, or an `.out` extension), while LCOV (`.info`) and Cobertura (`.xml`/`<coverage`) detection is unchanged.
 - A coverage path `/build/checkout/Sources/App/Service.swift` matches the diff path `Sources/App/Service.swift` by longest suffix; a path sharing no trailing component does not match.
+- A change touching `src/service.swift`, `vendor/lib/huge.swift`, and `Sources/App/Model.generated.swift`, assessed with `PathFilter(globs: ["vendor/**", "**/*.generated.swift"])`, scores only `src/service.swift` (the others appear in neither `files` nor any signal) and reports `excludedPaths == ["Sources/App/Model.generated.swift", "vendor/lib/huge.swift"]`. Excluding *all* changed files (e.g. a vendored-only change under `vendor/**`) throws `AugurError.noChanges`. `GlobPattern("vendor/**")` matches `vendor`, `vendor/a`, and `vendor/a/b/c.swift` but not `src/vendor/x`; `GlobPattern("src/*.swift")` matches `src/x.swift` but not `src/sub/x.swift`; `GlobPattern("file?.txt")` matches `file1.txt` but not `file.txt` or `file12.txt`.
 - An assessment with a `block`, a `review`, and a `proceed` file projects to a `SarifReport` with `version == "2.1.0"`, three results whose `level`s are `error`, `warning`, and `note` respectively, each citing rule `augur/change-risk`; a file with added lines `[42, 7, 99]` gets `region.startLine == 7`, a file with no added lines gets no region, and the SARIF JSON decodes back to an equal report.
 
 ## Error Cases
@@ -170,6 +181,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v6: Path exclusions for generated/vendored files (`Glob.swift`, Foundation-only). New `Sendable` `GlobPattern` (a whole-path-anchored glob supporting `*` = any chars except `/`, `**` = any chars incl `/` and zero or more segments, `?` = one char; lowered to `NSRegularExpression` with all other metacharacters escaped) and `PathFilter` (a `[GlobPattern]` wrapper with `excludes(_:)` / `isEmpty`). `Augur.assess(...)` gains an optional `filter:` parameter on both overloads (default `nil`); matching files are dropped **before** scoring and recorded in the new `Assessment.excludedPaths` (sorted; `excludedCount` is its size). `RiskEngine.assess(...)` gains `excludedPaths:` (default `[]`) to carry the report through. Excluding all changed files throws `AugurError.noChanges`. CLI: `.augur.toml` gains `[exclude] paths = [...]` (parsed in the CLI layer); `check`/`gate` gain repeatable `--exclude <glob>` (added to configured excludes) and `--no-exclude` (ignore configured excludes; CLI globs still apply). The human reporter prints `excluded: N files` when any were excluded; JSON includes `excludedPaths`. `AugurKit` remains free of third-party dependencies.
 - v5: Two more coverage formats ingested by the existing `CoverageParser`, keeping `AugurKit` Foundation-only. **JaCoCo XML** (Kotlin/Java) via `parseJaCoCo(_:)`: a `<line nr ...>` under `<package name><sourcefile name>` is instrumented, covered when `ci` (covered instructions) > 0; the reported path is `package@name` + `/` + `sourcefile@name`, reconciled by the existing suffix matching. **Go coverprofile** (`go test -coverprofile`) via `parseGoProfile(_:)`: a `mode:` header then `path:start.col,end.col numStmts count` blocks; each block instruments lines `start...end` and covers them when `count > 0` (a line is covered if any covering block has `count > 0`). `CoverageParser.Format` gains `jacoco` and `go`; `detectFormat` recognizes JaCoCo (`<report>`+`<sourcefile>` markers / `jacoco`) and Go (`mode:` first line / `.out` extension), with LCOV and Cobertura detection unchanged. `--coverage <path>` now accepts all four formats; auto-detection at the repo root also looks for `jacoco.xml`, `cover.out`, and `coverage.out` (first found wins, logged to stderr). The `CoverageReport` query API and the engine's consumption are unchanged. `AugurKit` remains free of third-party dependencies.
 - v4: SARIF 2.1.0 output (`Sarif.swift`). New Foundation-only `Codable` `SarifReport` model (a minimal valid SARIF 2.1.0 subset) with `init(from:toolVersion:addedLinesByPath:)` projecting an `Assessment` into one `run` carrying one `result` per file under a single `augur/change-risk` reporting descriptor; result `level` is mapped from each file's verdict (`block → error`, `review → warning`, `proceed → note`), `region.startLine` is the file's first added line when known, and `riskScore`/`confidence`/`verdict` go in `result.properties`. `SarifReport.jsonString()`/`jsonData()` mirror the `Assessment` renderers (sorted-key, deterministic). `Augur.addedLines(in:)` is exposed as a probe passthrough so the CLI can place regions. CLI adds `--sarif` and `--sarif-out <path>` to `check` (mutually exclusive with `--json`; `--sarif-out` implies `--sarif`). `AugurKit` remains free of third-party dependencies.
 - v3: Per-line coverage ingestion (`Coverage.swift`). New `CoverageReport` / `CoverageReport.FileCoverage` / `CoverageQuery` types and a Foundation-only `CoverageParser` (LCOV + Cobertura XML via `XMLParser`, with format auto-detection and `load(path:)`). `ChangedFile` gains `addedLines` (default empty, back-compatible). `RepositoryProbe` gains `addedLines(in:)` (default `[:]`); `GitRepository` parses `git diff --unified=0` hunk headers to populate it. Optional `coverage:` parameter threaded through `RiskEngine.assess(...)` and both `Augur.assess(...)` overloads (default `nil`); when supplied, the test-gap signal becomes `1 - covered/instrumented` over a file's instrumented changed lines (absent file → `0.7`), otherwise the original heuristic is unchanged. CLI adds `--coverage <path>` and `--no-coverage` to `check`/`gate`, with auto-detection of `lcov.info` / `coverage.xml` at the repo root. A composite `action.yml` ("augur gate") builds augur from its own checkout and gates on self-hosted macOS. `AugurKit` remains free of third-party dependencies.

@@ -92,6 +92,9 @@ augur check --no-config             # ignore any .augur.toml; use built-in defau
 
 augur check --coverage lcov.info    # sharpen test-gap with a coverage report (LCOV/Cobertura/JaCoCo/Go)
 augur check --no-coverage           # disable coverage auto-detection
+
+augur check --exclude 'vendor/**'   # drop vendored/generated paths from the assessment (repeatable)
+augur check --no-exclude            # ignore [exclude] paths from .augur.toml
 ```
 
 ### Coverage-aware test-gap (`--coverage`)
@@ -220,9 +223,42 @@ replace_defaults = false
 label = "internal-api"
 risk = 0.7
 fragments = ["internal/", "private/"]
+
+# Drop generated/vendored/lockfile paths from the assessment entirely (glob-matched).
+[exclude]
+paths = ["vendor/**", "node_modules/**", "**/*.generated.swift", "**/Package.resolved"]
 ```
 
 A worked, commented config and runnable scripts live in [`examples/`](examples/).
+
+### Excluding generated & vendored files (`[exclude]` / `--exclude`)
+
+Vendored dependencies, generated code, and lockfiles add noise to a risk verdict — a
+9,000-line `vendor/` drop or a churny `Package.resolved` is not something a reviewer
+should be scored on. List globs under `[exclude] paths` (or pass `--exclude <glob>`,
+repeatable) and `augur` removes matching files **before** scoring: they appear in neither
+the verdict nor any signal, and are reported as `excluded: N files` (and in JSON's
+`excludedPaths`). If *every* changed file is excluded, `augur` treats the change as clean.
+
+Globs are whole-path anchored and support three wildcards:
+
+| Token | Matches | Example |
+|-------|---------|---------|
+| `*`   | any characters **except** `/` (one path segment) | `src/*.swift` → `src/a.swift`, not `src/x/a.swift` |
+| `**`  | any characters **including** `/` (zero or more segments) | `vendor/**` → `vendor`, `vendor/a/b.c` |
+| `?`   | exactly one character | `file?.txt` → `file1.txt`, not `file.txt` |
+
+```sh
+augur check --exclude 'vendor/**'                 # vendored dependencies
+augur check --exclude '**/*.generated.swift'      # generated sources, anywhere
+augur check --exclude '**/Package.resolved'       # lockfiles
+augur check --exclude 'vendor/**' --exclude 'node_modules/**'  # repeatable
+
+augur check --no-exclude    # ignore [exclude] from .augur.toml (ad-hoc --exclude still applies)
+```
+
+CLI `--exclude` globs are *added* to any `[exclude] paths` from `.augur.toml`; `--no-exclude`
+drops the configured ones while keeping any passed on the command line.
 
 ### Calibrate & cache
 
@@ -296,7 +332,8 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
   "thresholds": { "review": 35.0, "block": 65.0 },
   "files": [
     { "path": "src/auth/token.swift", "riskScore": 45.0, "signals": [ /* ... */ ] }
-  ]
+  ],
+  "excludedPaths": [ "vendor/lib/huge.swift" ]
 }
 ```
 
