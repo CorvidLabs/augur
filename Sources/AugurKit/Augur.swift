@@ -66,6 +66,15 @@ public struct Augur: Sendable {
     public func currentHead() throws -> String {
         try probe.headSHA()
     }
+
+    /// The added (new-revision) line numbers per changed file in a scope, used to
+    /// place SARIF result regions on the first added line. Returns `[:]` when the
+    /// probe cannot supply per-line data.
+    /// - Parameter scope: The diff scope to query.
+    /// - Returns: A map of file path to its added line numbers.
+    public func addedLines(in scope: DiffScope) throws -> [String: [Int]] {
+        try probe.addedLines(in: scope)
+    }
 }
 
 // MARK: - JSON

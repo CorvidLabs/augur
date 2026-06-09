@@ -77,6 +77,8 @@ augur check                         # assess working-tree changes
 augur check --range main..HEAD      # assess a range (range-first)
 augur check --staged                # assess staged changes (pre-commit)
 augur check --json                  # machine-readable, sorted-key JSON
+augur check --sarif                 # SARIF 2.1.0 for GitHub code scanning
+augur check --sarif-out augur.sarif # write SARIF to a file (implies --sarif)
 augur check -v                      # show every contributing signal
 
 augur gate --threshold review       # exit 1 if verdict >= review (CI / agent loops)
@@ -126,6 +128,54 @@ tolerates prefix differences, but if two distinct files share an identical trail
 (`a/util.swift` and `b/util.swift` against a bare `util.swift`) the match is ambiguous and
 resolved deterministically (shorter then lexicographically-smaller path) — it may not be the
 file you intended. Prefer emitting coverage with repo-relative paths.
+
+### SARIF for GitHub code scanning (`--sarif`)
+
+`augur check --sarif` emits a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+log so augur's risk findings can be uploaded to GitHub code scanning and annotate a pull
+request **inline** — each changed file gets an annotation at its first added line.
+
+```sh
+augur check --range main..HEAD --sarif                  # SARIF to stdout
+augur check --range main..HEAD --sarif-out augur.sarif  # SARIF to a file
+```
+
+`--sarif` and `--json` are mutually exclusive; `--sarif-out <path>` implies `--sarif`. The
+output is generated entirely in `AugurKit` with Foundation `Codable` (no third-party SARIF
+dependency) and is deterministic (sorted keys).
+
+augur emits a **single** rule, `augur/change-risk`, and **one result per assessed file**.
+Each result's severity `level` is mapped from the file's verdict:
+
+| Verdict | SARIF level |
+|---------|-------------|
+| `block` | `error` |
+| `review` | `warning` |
+| `proceed` | `note` |
+
+The `message.text` summarizes the verdict, risk score, and top contributing signals; the
+location points at the file with a `region.startLine` of its first added line (when added
+lines are known); and `riskScore` / `confidence` / `verdict` are carried in
+`result.properties`.
+
+A runnable end-to-end demo is in [`examples/07-sarif.sh`](examples/07-sarif.sh), and a
+copy-paste CI workflow that uploads the SARIF is in
+[`examples/workflows/sarif.yml`](examples/workflows/sarif.yml):
+
+```yaml
+- run: augur check --range "origin/${{ github.base_ref }}..HEAD" --sarif --sarif-out augur.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: augur.sarif
+    category: augur
+```
+
+**Honest caveat (GHAS on private repos).** Uploading SARIF to GitHub code scanning via
+`github/codeql-action/upload-sarif` requires **GitHub Advanced Security (GHAS)** when the
+repository is **private** — without it the upload step returns a `403`. It works out of the
+box once the repo is **public**, or with GHAS enabled on a private repo. The example
+workflow marks the upload `continue-on-error: true` so the job stays green until GHAS/public
+is in place; remove that once it is. Generating the SARIF file itself needs nothing special.
 
 ### Configuration (`.augur.toml`)
 

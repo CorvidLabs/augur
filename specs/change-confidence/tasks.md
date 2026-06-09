@@ -29,6 +29,14 @@
 - [x] Composite `action.yml` ("augur gate") for self-hosted macOS; meaningful dogfood step in CI.
 - [x] Tests: LCOV + Cobertura parsing, suffix path-matching, unified=0 parsing, and covered-vs-uncovered scoring.
 
+## Done (v4)
+
+- [x] SARIF 2.1.0 output (`Sarif.swift`, Foundation-only `Codable`): `SarifReport(from:)` projecting an `Assessment` into one `run`, one `result` per file under the single `augur/change-risk` rule.
+- [x] Verdict→level mapping (`block → error`, `review → warning`, `proceed → note`); `region.startLine` from the file's first added line; `riskScore`/`confidence`/`verdict` in `result.properties`.
+- [x] CLI `--sarif` / `--sarif-out <path>` on `check` (mutually exclusive with `--json`); `Augur.addedLines(in:)` passthrough for regions.
+- [x] Tests: level mapping, result count, region from `addedLines`, deterministic JSON round-trip.
+- [x] Example `examples/07-sarif.sh` + reusable `examples/workflows/sarif.yml` (with `upload-sarif` and the GHAS-on-private caveat).
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).
