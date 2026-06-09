@@ -109,4 +109,65 @@ final class GlobTests: XCTestCase {
         XCTAssertTrue(filter.isEmpty)
         XCTAssertFalse(filter.excludes("anything/at/all.swift"))
     }
+
+    // MARK: - Pathological / robustness
+
+    func testEmptyPatternMatchesOnlyEmptyPath() {
+        let pattern = GlobPattern("")
+        XCTAssertTrue(pattern.matches(""))
+        XCTAssertFalse(pattern.matches("a"))
+    }
+
+    func testBareDoubleStarMatchesEverything() {
+        let pattern = GlobPattern("**")
+        XCTAssertTrue(pattern.matches("a"))
+        XCTAssertTrue(pattern.matches("a/b/c.swift"))
+        XCTAssertTrue(pattern.matches(""))
+    }
+
+    func testManyConsecutiveStarsDoNotCrash() {
+        // A pathological run of stars must still compile and match deterministically.
+        let pattern = GlobPattern("a/****/b")
+        XCTAssertTrue(pattern.matches("a/x/y/b"))
+        XCTAssertTrue(pattern.matches("a/b"))
+    }
+
+    func testPatternIsWholePathAnchoredNotSubstring() {
+        let pattern = GlobPattern("auth")
+        XCTAssertTrue(pattern.matches("auth"))
+        XCTAssertFalse(pattern.matches("src/auth/token.swift"))
+        XCTAssertFalse(pattern.matches("oauth"))
+    }
+
+    func testNestedBracesAndPipesAreLiteral() {
+        let pattern = GlobPattern("a{b|c}.swift")
+        XCTAssertTrue(pattern.matches("a{b|c}.swift"))
+        XCTAssertFalse(pattern.matches("ab.swift"))
+    }
+
+    func testTrailingSlashNormalized() {
+        let pattern = GlobPattern("src/lib")
+        XCTAssertTrue(pattern.matches("src/lib/"))
+        XCTAssertTrue(pattern.matches("src/lib"))
+    }
+
+    // MARK: - CODEOWNERS pattern compilation
+
+    func testCodeOwnersCatchAllCompilesToDoubleStar() {
+        XCTAssertEqual(CodeOwners.compile(pattern: "*").pattern, "**")
+    }
+
+    func testCodeOwnersRootedDirectoryCompiles() {
+        let glob = CodeOwners.compile(pattern: "/docs/")
+        XCTAssertTrue(glob.matches("docs/guide.md"))
+        XCTAssertTrue(glob.matches("docs/sub/x.md"))
+        XCTAssertFalse(glob.matches("src/docs/x.md"))
+    }
+
+    func testCodeOwnersBareExtensionMatchesAnyDepth() {
+        let glob = CodeOwners.compile(pattern: "*.swift")
+        XCTAssertTrue(glob.matches("a.swift"))
+        XCTAssertTrue(glob.matches("Sources/Deep/B.swift"))
+        XCTAssertFalse(glob.matches("a.kt"))
+    }
 }

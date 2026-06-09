@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 6
+version: 7
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -13,6 +13,7 @@ files:
   - Sources/AugurKit/Coverage.swift
   - Sources/AugurKit/Sarif.swift
   - Sources/AugurKit/Glob.swift
+  - Sources/AugurKit/CodeOwners.swift
 db_tables: []
 depends_on: []
 ---
@@ -41,7 +42,7 @@ The scoring has two layers:
 | Export | Description |
 |--------|-------------|
 | `Augur.init(probe:engine:historyLimit:)` | Construct the facade over a `RepositoryProbe`. |
-| `Augur.assess(scope:now:coverage:filter:)` | Probe the repository and return an `Assessment` for a `DiffScope`; an optional `CoverageReport` sharpens the test-gap signal per changed line, and an optional `PathFilter` drops matching files before scoring. |
+| `Augur.assess(scope:now:coverage:filter:codeOwners:)` | Probe the repository and return an `Assessment` for a `DiffScope`; an optional `CoverageReport` sharpens the test-gap signal per changed line, an optional `PathFilter` drops matching files before scoring, and an optional `CodeOwners` drives the `codeowners` signal. |
 | `Assessment.jsonString()` | Render the assessment as stable, sorted-key JSON for agents. |
 | `Assessment.jsonData()` | Same as `jsonString()` but returns `Data`. |
 | `Reporter.render(_:verbose:)` | Render an `Assessment` as human-readable terminal text. |
@@ -51,8 +52,8 @@ The scoring has two layers:
 | Export | Description |
 |--------|-------------|
 | `RiskEngine.init(weights:rules:thresholds:)` | Construct the engine with prior weights, sensitivity rules, and verdict thresholds. |
-| `RiskEngine.assess(scope:changedFiles:history:now:coverage:excludedPaths:)` | Pure scoring over an explicit change surface and history, with an optional `CoverageReport`; `excludedPaths` (already filtered out by the caller) is recorded on the `Assessment`. |
-| `RiskEngine.Weights` | Documented prior weights for each signal (sum to 1.0); `Codable`. |
+| `RiskEngine.assess(scope:changedFiles:history:now:coverage:codeOwners:excludedPaths:)` | Pure scoring over an explicit change surface and history, with an optional `CoverageReport` and `CodeOwners`; `excludedPaths` (already filtered out by the caller) is recorded on the `Assessment`. |
+| `RiskEngine.Weights` | Documented prior weights for each signal including `codeowners` (sum to 1.0); `Codable`. |
 | `RiskEngine.calibrationConfidence(totalCommits:incidentCommits:)` | Static calibration-confidence function (0...1). |
 
 ### Repository Access
@@ -64,7 +65,7 @@ The scoring has two layers:
 | `HistorySnapshot.init(commits:)` | Derives churn, recency, ownership, coupling, and incidents from commits. |
 | `HistorySnapshot.init(cache:)` | Rebuilds an equivalent snapshot from a `CalibrationCache` without re-walking `git log`. |
 | `HistorySnapshot.makeCache(head:)` | Produces a serializable `CalibrationCache` pinned to a `HEAD` SHA. |
-| `Augur.assess(scope:history:now:coverage:filter:)` | Assess using a pre-built snapshot (e.g. from a cache), skipping the log walk; optional `CoverageReport` and `PathFilter`. |
+| `Augur.assess(scope:history:now:coverage:filter:codeOwners:)` | Assess using a pre-built snapshot (e.g. from a cache), skipping the log walk; optional `CoverageReport`, `PathFilter`, and `CodeOwners`. |
 | `RepositoryProbe.addedLines(in:)` | Added (new-revision) line numbers per file in a scope; default `[:]`. `GitRepository` parses `git diff --unified=0`. |
 | `Augur.calibrate()` | Walk history once and return a `CalibrationCache` pinned to the current `HEAD`. |
 | `Augur.currentHead()` | The current `HEAD` SHA of the underlying repository. |
@@ -95,6 +96,14 @@ The scoring has two layers:
 |--------|-------------|
 | `GlobPattern` | A `Sendable` compiled glob matched against forward-slash paths: `*` (any chars except `/`), `**` (any chars incl `/`, matching zero or more segments), `?` (one char). Anchored to the whole path; `matches(_:)` reports a match. Foundation-only (compiled to `NSRegularExpression`); other regex metacharacters are escaped to match literally. |
 | `PathFilter` | A `Sendable` wrapper over `[GlobPattern]`; `init(globs:)` / `init(patterns:)`, `excludes(_ path:)` (true when any pattern matches), and `isEmpty`. An empty filter excludes nothing. |
+
+### CODEOWNERS
+
+| Export | Description |
+|--------|-------------|
+| `CodeOwners` | A `Sendable` parsed `CODEOWNERS` file. `parse(_:)` reads the standard format (comments `#`, blank lines, each remaining line a pattern + zero or more owners); `owners(for path:)` returns the owners of a path with **last-match-wins** semantics (an owner-less rule unsets ownership; no match → `[]`). `isEmpty` and `rules` expose the parsed state. Patterns reuse `GlobPattern` (Foundation-only). |
+| `CodeOwners.Rule` | One parsed rule: a compiled `pattern` (`GlobPattern`), its original `source` text, and `owners` (possibly empty). |
+| `CodeOwners.standardLocations` | The standard repo-root locations (`.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS`) in GitHub precedence order. |
 
 ### Coverage
 
@@ -135,8 +144,10 @@ The scoring has two layers:
 - Thresholds change only the score→verdict mapping, never the `riskScore`; identical inputs under different thresholds yield identical scores.
 - A `CalibrationCache` is a lossless projection of the snapshot facts the engine queries: a snapshot rebuilt via `HistorySnapshot(cache:)` produces an `Assessment` identical to one from the original commits. `topPartner` ties are broken by partner path so the projection is deterministic.
 - The heuristic prior always contributes; the incident signal is multiplied by `Calibration.confidence`, so on a history-free repository the incident contribution is `0`.
-- `RiskEngine.Weights` sum to `1.0`; per-file score is the weight-normalized blend of its signals.
-- Assessment is deterministic: identical `(changedFiles, history, now, coverage)` yield identical output. Coverage parsing and matching use no `Date`/randomness.
+- `RiskEngine.Weights` sum to `1.0` (including the `codeowners` weight); per-file score is the weight-normalized blend of its signals. When `codeowners` (`0.08`) was added, the seven prior weights were scaled by `1 - 0.08 = 0.92`, preserving their relative proportions while keeping the sum at `1.0`.
+- The `codeowners` signal is **neutral** (`risk 0`, weight contributes nothing to the blend) when no `CodeOwners` is supplied (`nil`) — repos without a `CODEOWNERS` file are never penalized. When `CodeOwners` is supplied, a changed file with no declared owner scores `risk 0.6` ("no CODEOWNERS owner") and an owned file scores `risk 0` (detail lists the owners), so an unowned file scores strictly higher overall than the same change under no `CODEOWNERS`.
+- `CodeOwners.owners(for:)` applies **last-match-wins**: among all rules whose pattern matches, the last in file order determines the owners; an owner-less rule unsets ownership; a path matching no rule is unowned (`[]`). `CodeOwners` parsing/matching is deterministic and Foundation-only (`GlobPattern`), with no `Date`/randomness.
+- Assessment is deterministic: identical `(changedFiles, history, now, coverage, codeOwners)` yield identical output (byte-identical JSON). Coverage, glob, and CODEOWNERS parsing/matching use no `Date`/randomness.
 - Coverage precedence in the test-gap signal: when a `CoverageReport` is supplied and the file is a non-test, non-binary code file with instrumented changed lines, `risk = 1 - covered/instrumented`; a code file entirely absent from the report is `0.7` ("not in coverage report"); when coverage cannot refine the file (no added lines known, or no changed line instrumented) the existing heuristic applies. With no coverage supplied, the heuristic test-gap behavior is unchanged.
 - `CoverageQuery` counts only *instrumented* changed lines: a changed line the tool never instrumented contributes to neither `covered` nor `instrumented`, and `coveredFraction` is `nil` when `instrumented == 0`.
 - Coverage path matching is by normalized longest-suffix at component boundaries; exact (normalized) matches win, ties break by shorter then lexicographically-smaller reported path. Diff/coverage prefix differences are tolerated; identical suffixes across distinct files are ambiguous (documented limitation).
@@ -164,6 +175,7 @@ The scoring has two layers:
 - `detectFormat` recognizes JaCoCo XML (a `<report>`+`<sourcefile>` pairing or a `jacoco` marker, even with an `.xml` extension) and a Go coverprofile (first non-empty line begins `mode:`, or an `.out` extension), while LCOV (`.info`) and Cobertura (`.xml`/`<coverage`) detection is unchanged.
 - A coverage path `/build/checkout/Sources/App/Service.swift` matches the diff path `Sources/App/Service.swift` by longest suffix; a path sharing no trailing component does not match.
 - A change touching `src/service.swift`, `vendor/lib/huge.swift`, and `Sources/App/Model.generated.swift`, assessed with `PathFilter(globs: ["vendor/**", "**/*.generated.swift"])`, scores only `src/service.swift` (the others appear in neither `files` nor any signal) and reports `excludedPaths == ["Sources/App/Model.generated.swift", "vendor/lib/huge.swift"]`. Excluding *all* changed files (e.g. a vendored-only change under `vendor/**`) throws `AugurError.noChanges`. `GlobPattern("vendor/**")` matches `vendor`, `vendor/a`, and `vendor/a/b/c.swift` but not `src/vendor/x`; `GlobPattern("src/*.swift")` matches `src/x.swift` but not `src/sub/x.swift`; `GlobPattern("file?.txt")` matches `file1.txt` but not `file.txt` or `file12.txt`.
+- With no `CodeOwners` supplied, a changed file's `codeowners` signal is `risk 0` ("no CODEOWNERS file"). Parsing the `CODEOWNERS` body `* @global` then `/src/ @src-team` and assessing `src/service.swift` yields a `codeowners` signal of `risk 0` ("owned by @src-team"); assessing `lib/service.swift` (matched only by `*`) is owned by `@global`; a body of just `/docs/ @docs-team` leaves `src/service.swift` unowned (`risk 0.6`, "no CODEOWNERS owner") and that file scores strictly higher overall than the same change with no `CODEOWNERS`. `CodeOwners.parse` with `* @global` then `/generated/` (no owners) reports `generated/code.swift` as unowned (the empty rule unsets the catch-all), while `*.swift @swift` owns `Sources/App/Deep/File.swift` at any depth.
 - An assessment with a `block`, a `review`, and a `proceed` file projects to a `SarifReport` with `version == "2.1.0"`, three results whose `level`s are `error`, `warning`, and `note` respectively, each citing rule `augur/change-risk`; a file with added lines `[42, 7, 99]` gets `region.startLine == 7`, a file with no added lines gets no region, and the SARIF JSON decodes back to an equal report.
 
 ## Error Cases
@@ -181,6 +193,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v7: CODEOWNERS-aware ownership signal (`CodeOwners.swift`, Foundation-only, reusing `GlobPattern`). New `Sendable` `CodeOwners` (with `CodeOwners.Rule`): `parse(_:)` reads the standard `CODEOWNERS` format (comments, blanks, `<pattern> @owner...`), translating gitignore-like patterns to `GlobPattern` syntax (`*` → `**`, leading `/` anchors, trailing `/` → `dir/**`, a bare name matches at any depth via `**/name`); `owners(for path:)` returns a path's owners with **last-match-wins** semantics (owner-less rule unsets; no match → `[]`). `standardLocations` lists `.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS`. A new `codeowners` signal in `RiskEngine.assessFile`: neutral (`0`) when no `CodeOwners` is supplied, `0.6` ("no CODEOWNERS owner") for an unowned changed file, `0` (detail lists owners) when owned. `RiskEngine.Weights` gains `codeowners` (`0.08`); the seven prior weights are scaled by `0.92` so the blend still sums to `1.0` with unchanged relative proportions. Both `Augur.assess(...)` overloads and `RiskEngine.assess(...)` gain an optional `codeOwners:` parameter (default `nil`). CLI: `check`/`gate` auto-discover a `CODEOWNERS` file at the standard locations and accept `--no-codeowners` to disable; the owner appears in the signal detail (human + JSON); `.augur.toml [weights] codeowners` is parseable in the CLI layer. `AugurKit` remains free of third-party dependencies.
 - v6: Path exclusions for generated/vendored files (`Glob.swift`, Foundation-only). New `Sendable` `GlobPattern` (a whole-path-anchored glob supporting `*` = any chars except `/`, `**` = any chars incl `/` and zero or more segments, `?` = one char; lowered to `NSRegularExpression` with all other metacharacters escaped) and `PathFilter` (a `[GlobPattern]` wrapper with `excludes(_:)` / `isEmpty`). `Augur.assess(...)` gains an optional `filter:` parameter on both overloads (default `nil`); matching files are dropped **before** scoring and recorded in the new `Assessment.excludedPaths` (sorted; `excludedCount` is its size). `RiskEngine.assess(...)` gains `excludedPaths:` (default `[]`) to carry the report through. Excluding all changed files throws `AugurError.noChanges`. CLI: `.augur.toml` gains `[exclude] paths = [...]` (parsed in the CLI layer); `check`/`gate` gain repeatable `--exclude <glob>` (added to configured excludes) and `--no-exclude` (ignore configured excludes; CLI globs still apply). The human reporter prints `excluded: N files` when any were excluded; JSON includes `excludedPaths`. `AugurKit` remains free of third-party dependencies.
 - v5: Two more coverage formats ingested by the existing `CoverageParser`, keeping `AugurKit` Foundation-only. **JaCoCo XML** (Kotlin/Java) via `parseJaCoCo(_:)`: a `<line nr ...>` under `<package name><sourcefile name>` is instrumented, covered when `ci` (covered instructions) > 0; the reported path is `package@name` + `/` + `sourcefile@name`, reconciled by the existing suffix matching. **Go coverprofile** (`go test -coverprofile`) via `parseGoProfile(_:)`: a `mode:` header then `path:start.col,end.col numStmts count` blocks; each block instruments lines `start...end` and covers them when `count > 0` (a line is covered if any covering block has `count > 0`). `CoverageParser.Format` gains `jacoco` and `go`; `detectFormat` recognizes JaCoCo (`<report>`+`<sourcefile>` markers / `jacoco`) and Go (`mode:` first line / `.out` extension), with LCOV and Cobertura detection unchanged. `--coverage <path>` now accepts all four formats; auto-detection at the repo root also looks for `jacoco.xml`, `cover.out`, and `coverage.out` (first found wins, logged to stderr). The `CoverageReport` query API and the engine's consumption are unchanged. `AugurKit` remains free of third-party dependencies.
 - v4: SARIF 2.1.0 output (`Sarif.swift`). New Foundation-only `Codable` `SarifReport` model (a minimal valid SARIF 2.1.0 subset) with `init(from:toolVersion:addedLinesByPath:)` projecting an `Assessment` into one `run` carrying one `result` per file under a single `augur/change-risk` reporting descriptor; result `level` is mapped from each file's verdict (`block → error`, `review → warning`, `proceed → note`), `region.startLine` is the file's first added line when known, and `riskScore`/`confidence`/`verdict` go in `result.properties`. `SarifReport.jsonString()`/`jsonData()` mirror the `Assessment` renderers (sorted-key, deterministic). `Augur.addedLines(in:)` is exposed as a probe passthrough so the CLI can place regions. CLI adds `--sarif` and `--sarif-out <path>` to `check` (mutually exclusive with `--json`; `--sarif-out` implies `--sarif`). `AugurKit` remains free of third-party dependencies.

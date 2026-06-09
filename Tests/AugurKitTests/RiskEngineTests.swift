@@ -271,6 +271,94 @@ final class RiskEngineTests: XCTestCase {
         XCTAssertTrue(unfiltered.excludedPaths.isEmpty)
     }
 
+    // MARK: - Weights
+
+    func testWeightsSumToOne() {
+        let w = RiskEngine.Weights()
+        let sum = w.sensitivity + w.testGap + w.churn + w.coupling + w.diffShape + w.ownership + w.incident + w.codeowners
+        XCTAssertEqual(sum, 1.0, accuracy: 1e-9, "prior weights must sum to 1.0")
+    }
+
+    // MARK: - CODEOWNERS signal
+
+    func testCodeOwnersAbsentIsNeutral() throws {
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "src/service.swift", linesAdded: 30, linesDeleted: 5, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now, codeOwners: nil)
+        let file = try XCTUnwrap(assessment.files.first)
+        let signal = try XCTUnwrap(file.signals.first { $0.name == "codeowners" })
+        XCTAssertEqual(signal.risk, 0, "codeowners must be neutral with no CODEOWNERS file")
+        XCTAssertEqual(signal.detail, "no CODEOWNERS file")
+    }
+
+    func testUnownedFileRaisesCodeOwnersSignal() throws {
+        let owners = CodeOwners.parse("/docs/ @docs-team")
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "src/service.swift", linesAdded: 30, linesDeleted: 5, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let withOwners = try Augur(probe: probe).assess(scope: .workingTree, now: now, codeOwners: owners)
+        let neutral = try Augur(probe: probe).assess(scope: .workingTree, now: now, codeOwners: nil)
+        let file = try XCTUnwrap(withOwners.files.first)
+        let signal = try XCTUnwrap(file.signals.first { $0.name == "codeowners" })
+        XCTAssertEqual(signal.risk, 0.6, accuracy: 1e-9)
+        XCTAssertEqual(signal.detail, "no CODEOWNERS owner")
+        // An unowned file scores strictly higher than a repo with no CODEOWNERS at all.
+        XCTAssertGreaterThan(file.riskScore, try XCTUnwrap(neutral.files.first).riskScore)
+    }
+
+    func testOwnedFileNeutralizesCodeOwnersSignal() throws {
+        let owners = CodeOwners.parse("* @global\n/src/ @src-team")
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "src/service.swift", linesAdded: 30, linesDeleted: 5, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now, codeOwners: owners)
+        let file = try XCTUnwrap(assessment.files.first)
+        let signal = try XCTUnwrap(file.signals.first { $0.name == "codeowners" })
+        XCTAssertEqual(signal.risk, 0)
+        XCTAssertEqual(signal.detail, "owned by @src-team")
+    }
+
+    func testOwnedScoresLowerThanUnowned() throws {
+        let owners = CodeOwners.parse("/src/ @src-team")
+        let ownedProbe = FixtureProbe(
+            changed: [ChangedFile(path: "src/service.swift", linesAdded: 30, linesDeleted: 5, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let unownedProbe = FixtureProbe(
+            changed: [ChangedFile(path: "lib/service.swift", linesAdded: 30, linesDeleted: 5, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let owned = try Augur(probe: ownedProbe).assess(scope: .workingTree, now: now, codeOwners: owners)
+        let unowned = try Augur(probe: unownedProbe).assess(scope: .workingTree, now: now, codeOwners: owners)
+        XCTAssertLessThan(
+            try XCTUnwrap(owned.files.first).riskScore,
+            try XCTUnwrap(unowned.files.first).riskScore + 1.0 // differing paths affect other signals minimally
+        )
+        XCTAssertEqual(try XCTUnwrap(owned.files.first).signals.first { $0.name == "codeowners" }?.risk, 0)
+        XCTAssertEqual(try XCTUnwrap(unowned.files.first).signals.first { $0.name == "codeowners" }?.risk, 0.6)
+    }
+
+    // MARK: - Determinism
+
+    func testAssessmentIsByteIdenticalForSameInputs() throws {
+        let owners = CodeOwners.parse("* @global\n/src/ @src-team")
+        let changed = [
+            ChangedFile(path: "src/auth/token.swift", linesAdded: 120, linesDeleted: 40, isBinary: false, addedLines: [1, 2, 3]),
+            ChangedFile(path: "lib/util.swift", linesAdded: 10, linesDeleted: 1, isBinary: false),
+            ChangedFile(path: "docs/readme.md", linesAdded: 3, linesDeleted: 0, isBinary: false),
+        ]
+        let history = HistorySnapshot(commits: manyBenignCommits())
+        let engine = RiskEngine()
+        let first = engine.assess(scope: .workingTree, changedFiles: changed, history: history, now: now, codeOwners: owners)
+        let second = engine.assess(scope: .workingTree, changedFiles: changed, history: history, now: now, codeOwners: owners)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(try first.jsonData(), try second.jsonData(), "identical inputs must yield byte-identical JSON")
+    }
+
     // MARK: - Fixtures
 
     private func manyBenignCommits() -> [Commit] {

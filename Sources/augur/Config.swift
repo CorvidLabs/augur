@@ -24,6 +24,7 @@ struct AugurConfig: Decodable, Sendable {
         var diffShape: Double?
         var ownership: Double?
         var incident: Double?
+        var codeowners: Double?
     }
 
     struct RuleConfig: Decodable, Sendable {
@@ -68,6 +69,7 @@ struct AugurConfig: Decodable, Sendable {
         if let value = configured.diffShape { weights.diffShape = value }
         if let value = configured.ownership { weights.ownership = value }
         if let value = configured.incident { weights.incident = value }
+        if let value = configured.codeowners { weights.codeowners = value }
         return weights
     }
 
