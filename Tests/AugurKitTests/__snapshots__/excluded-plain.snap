@@ -1,0 +1,14 @@
+augur · main..HEAD
+
+  verdict     [!] REVIEW
+  risk        [#########           ]  44/100
+  confidence  56/100
+  calibration weak (14 incidents / 180 commits)
+
+  files (1), riskiest first:
+    !    44  Sources/Core/Engine.swift
+          · churn: 150 lines changed
+
+  excluded: 2 files
+
+  → an agent should request human review before merging

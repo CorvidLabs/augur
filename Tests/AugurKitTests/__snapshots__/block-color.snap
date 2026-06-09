@@ -1,0 +1,12 @@
+[1maugur[0m · [2mmain..HEAD[0m
+
+  [1mverdict[0m     [1;31m[x][0m [1;31mBLOCK[0m
+  [1mrisk[0m        [[1;31m████████████████[0m[2m░░░░[0m]  82/100
+  [1mconfidence[0m  [36m18[0m/100
+  [1mcalibration[0m [36mhistory-backed[0m[2m (31 incidents / 250 commits)[0m
+
+  [1mfiles (1), riskiest first:[0m
+    [1;31mx[0m [1;31m   82[0m  [36mSources/Auth/TokenStore.swift[0m
+[2m          · sensitivity: matches auth path[0m
+
+  [1;31m→ do not merge without deliberate human sign-off[0m

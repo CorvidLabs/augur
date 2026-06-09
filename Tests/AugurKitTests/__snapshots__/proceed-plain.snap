@@ -1,0 +1,10 @@
+augur · main..HEAD
+
+  verdict     [ok] PROCEED
+  risk        [##                  ]  12/100
+  confidence  88/100
+  calibration history-backed (9 incidents / 400 commits)
+
+  files (1), riskiest first:
+    ·    12  Sources/Core/Formatter.swift
+          · churn: 18 lines changed

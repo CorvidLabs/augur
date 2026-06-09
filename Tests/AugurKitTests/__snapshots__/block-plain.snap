@@ -1,0 +1,12 @@
+augur · main..HEAD
+
+  verdict     [x] BLOCK
+  risk        [################    ]  82/100
+  confidence  18/100
+  calibration history-backed (31 incidents / 250 commits)
+
+  files (1), riskiest first:
+    x    82  Sources/Auth/TokenStore.swift
+          · sensitivity: matches auth path
+
+  → do not merge without deliberate human sign-off

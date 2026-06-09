@@ -1,0 +1,19 @@
+[1maugur[0m · [2mmain..HEAD[0m
+
+  [1mverdict[0m     [33m[!][0m [33mREVIEW[0m
+  [1mrisk[0m        [[33m████████████[0m[2m░░░░░░░░[0m]  58/100
+  [1mconfidence[0m  [36m42[0m/100
+  [1mcalibration[0m [36mhistory-backed[0m[2m (22 incidents / 320 commits)[0m
+
+  [1mfiles (3), riskiest first:[0m
+    [1;31mx[0m [1;31m   82[0m  [36mSources/Auth/TokenStore.swift[0m
+[2m          · sensitivity: matches auth path[0m
+[2m          · test-gap: no tests changed[0m
+[2m          · churn: 160 lines changed[0m
+    [33m![0m [33m   48[0m  [36mSources/Core/Engine.swift[0m
+[2m          · churn: 190 lines changed[0m
+[2m          · coupling: co-changes with 4 files[0m
+    [32m·[0m [32m   14[0m  [36mSources/Core/Formatter.swift[0m
+[2m          · churn: 24 lines changed[0m
+
+  [33m→ an agent should request human review before merging[0m
