@@ -1,0 +1,23 @@
+---
+interface Props { type?: 'note' | 'warn' | 'tip' | 'caveat' }
+const { type = 'note' } = Astro.props
+---
+<aside class={`callout callout-${type}`}>
+  {type === 'caveat' && <span class="callout-caveat-icon" aria-hidden="true">⚠</span>}
+  <slot />
+</aside>
+
+<style is:global>
+  .callout { padding: 16px 18px; border-left: 3px solid var(--accent);
+    background: var(--accent-muted); border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout strong { color: var(--accent-bright); }
+  .callout-warn { border-left-color: var(--block); background: var(--block-muted); }
+  .callout-warn strong { color: #fca5a5; }
+  .callout-tip { border-left-color: var(--proceed); background: var(--proceed-muted); }
+  .callout-tip strong { color: #6ee7b7; }
+  .callout-caveat { border-left-color: var(--review); background: var(--review-muted);
+    display: flex; gap: 12px; align-items: flex-start; }
+  .callout-caveat strong { color: var(--review); }
+  .callout-caveat-icon { font-size: 1.1rem; color: var(--review); flex-shrink: 0; margin-top: 1px; }
+</style>
