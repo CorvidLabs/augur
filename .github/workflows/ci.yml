@@ -16,9 +16,41 @@ jobs:
       - run: swift build
       - run: swift test
       - run: fledge spec check
-      - name: Dogfood — augur gates its own latest commit (non-fatal)
+      - name: Dogfood — build the release binary augur ships
+        run: swift build -c release
+      - name: Dogfood — augur assesses its own change (verdict in the log)
         run: |
-          # Print the verdict, then gate; non-fatal so first-commit / edge cases
-          # don't redden CI while still surfacing the result.
-          swift run augur check --range HEAD~1..HEAD || true
-          swift run augur gate --range HEAD~1..HEAD --threshold block || true
+          # Resolve a range: prefer the PR base (origin/main..HEAD), fall back to
+          # the last commit, else an empty range on a brand-new repo. This never
+          # errors on a first commit.
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          RANGE=''
+          if git rev-parse --verify -q origin/main >/dev/null; then
+            RANGE='origin/main..HEAD'
+          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+            RANGE='HEAD~1..HEAD'
+          fi
+          echo "augur self-assessment range: '${RANGE:-<empty / first commit>}'"
+          # Print the full human verdict to the CI log (never fatal here).
+          if [ -n "$RANGE" ]; then
+            .build/release/augur check --range "$RANGE" || true
+          else
+            echo "No prior commit to diff against — skipping self-check."
+          fi
+      - name: Dogfood — augur gates itself (fatal only on a block-level verdict)
+        run: |
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          RANGE=''
+          if git rev-parse --verify -q origin/main >/dev/null; then
+            RANGE='origin/main..HEAD'
+          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+            RANGE='HEAD~1..HEAD'
+          fi
+          # `gate --threshold block` exits non-zero ONLY on a block verdict, so a
+          # genuinely dangerous self-change fails CI while proceed/review pass.
+          # An empty range (first commit) short-circuits to success.
+          if [ -n "$RANGE" ]; then
+            .build/release/augur gate --range "$RANGE" --threshold block
+          else
+            echo "No range to gate — passing."
+          fi
