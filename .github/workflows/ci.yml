@@ -2,6 +2,12 @@ name: CI
 on:
   push: { branches: [main] }
   pull_request:
+
+# Run the bundled Node-20 JavaScript actions (e.g. actions/checkout) on Node 24 to
+# silence GitHub's Node-20 end-of-life deprecation warnings.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-test:
     runs-on: [self-hosted, macOS]

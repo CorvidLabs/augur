@@ -14,7 +14,7 @@ inputs:
     required: false
     default: "block"
   coverage:
-    description: "Optional path to an LCOV (.info) or Cobertura (.xml) coverage report."
+    description: "Optional path to a coverage report (LCOV .info, Cobertura/JaCoCo .xml, or Go .out coverprofile)."
     required: false
     default: ""
   working-directory:

@@ -26,6 +26,11 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# Run the bundled Node-20 JavaScript actions (checkout, upload/deploy-pages, etc.)
+# on Node 24 to silence GitHub's Node-20 end-of-life deprecation warnings.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
   pages: write

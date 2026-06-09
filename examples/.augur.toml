@@ -15,15 +15,17 @@ review = 35
 block = 65
 
 # Signal weights for the heuristic prior. Only the keys you list are overridden;
-# the rest keep their documented defaults. (Defaults shown.)
+# the rest keep their documented defaults. (Current defaults shown — they sum to
+# 1.0, but overrides need NOT: the engine normalizes the blend.)
 [weights]
-sensitivity = 0.22
-test_gap = 0.20
-churn = 0.15
-coupling = 0.13
-diff_shape = 0.12
-ownership = 0.10
-incident = 0.10
+sensitivity = 0.2024
+test_gap = 0.1656
+churn = 0.138
+coupling = 0.1196
+diff_shape = 0.1104
+ownership = 0.092
+incident = 0.092
+codeowners = 0.08
 
 # Set to true to use ONLY the custom [[rules]] below and drop augur's built-in
 # sensitivity ruleset (secrets, auth, crypto, payments, migration, infra, ci,
