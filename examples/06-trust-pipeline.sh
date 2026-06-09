@@ -16,7 +16,7 @@
 #   5. `attest log` the recorded provenance,
 #   6. `attest verify` a policy that demands human approval for review+ verdicts
 #      — it FAILs (exit 1) on the agent-only record, then PASSes (exit 0) once a
-#      human attestation carrying the same verdict is added.
+#      human-approved attestation is added to the commit.
 #
 # attest is a sibling tool at ../attest. If that checkout is absent this script
 # prints a clear skip message and exits 0 (so it is safe to run anywhere).
@@ -107,13 +107,12 @@ echo "  attest verify -> exit $FAIL_CODE   (only an agent attested a 'review' ch
 echo
 
 # --- 6. add a human-approved attestation, then verify PASSES -----------------
-# The policy only clears when a triggering (verdict >= review) attestation is
-# itself human-approved, so the human signs off carrying the same verdict.
+# Any human-approved attestation on the commit clears the rule — the human need
+# not restate the verdict; recording the sign-off is enough.
 echo "== 6) a human signs off, then attest verify PASSES =="
 "$ATTEST" sign -C "$REPO" \
     --commit "$HEAD" \
     --reviewer human:leif \
-    --verdict review \
     --confidence 0.8 \
     --human-approved \
     --tests-passed \

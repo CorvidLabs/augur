@@ -334,9 +334,8 @@ attest verify · [ok] PASS (1 commit checked)
   attest verify -> exit 0   (human approval now satisfies the policy)
 ```
 
-The policy clears only when a *triggering* attestation (one whose verdict is at or above
-the threshold) is itself human-approved, so the human signs off carrying the same `review`
-verdict.
+The policy clears as soon as **any** human-approved attestation exists on the commit — the
+human signs off with a plain `--human-approved` and need not restate the verdict.
 
 ### Reusable CI workflow
 
