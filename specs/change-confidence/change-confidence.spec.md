@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 7
+version: 8
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -10,6 +10,7 @@ files:
   - Sources/AugurKit/RiskEngine.swift
   - Sources/AugurKit/Augur.swift
   - Sources/AugurKit/Reporter.swift
+  - Sources/AugurKit/ANSI.swift
   - Sources/AugurKit/Coverage.swift
   - Sources/AugurKit/Sarif.swift
   - Sources/AugurKit/Glob.swift
@@ -45,7 +46,8 @@ The scoring has two layers:
 | `Augur.assess(scope:now:coverage:filter:codeOwners:)` | Probe the repository and return an `Assessment` for a `DiffScope`; an optional `CoverageReport` sharpens the test-gap signal per changed line, an optional `PathFilter` drops matching files before scoring, and an optional `CodeOwners` drives the `codeowners` signal. |
 | `Assessment.jsonString()` | Render the assessment as stable, sorted-key JSON for agents. |
 | `Assessment.jsonData()` | Same as `jsonString()` but returns `Data`. |
-| `Reporter.render(_:verbose:)` | Render an `Assessment` as human-readable terminal text. |
+| `Reporter.render(_:verbose:)` | Render an `Assessment` as plain human-readable terminal text. |
+| `Reporter.render(_:verbose:color:)` | Render an `Assessment` as terminal text, optionally applying semantic ANSI color; `color: false` is byte-identical to the plain overload. |
 
 ### Engine
 
@@ -193,6 +195,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v8: Colorful terminal output for the human reporter (`ANSI.swift`, Foundation-only, internal). New internal `ANSI` (escape codes / `Attribute` / `Style`), `Palette` (semantic verdict/level/label styles), and `Colorizer` (`enabled` gate; a no-op when disabled). `Reporter` gains a `render(_:verbose:color:)` overload; the existing `render(_:verbose:)` is preserved and is exactly `render(_:verbose:color:false)`, which is byte-identical to prior plain output. When `color: true`, the verdict badge/word is tinted (`proceed → green`, `review → yellow`, `block → bold red`), the risk meter uses gradient block glyphs (`█`/`░`) colored by level, headers are bold, secondary/signal detail is dim, file paths are cyan, per-file rows are tinted by that file's verdict, and confidence/calibration are cyan. CLI: `check` gains `--color <auto|always|never>` (default `auto`); `auto` enables color only when stdout is a TTY and `NO_COLOR` is unset (https://no-color.org), so piped / `--json` / `--sarif` output stays plain. `AugurKit` remains free of third-party dependencies.
 - v7: CODEOWNERS-aware ownership signal (`CodeOwners.swift`, Foundation-only, reusing `GlobPattern`). New `Sendable` `CodeOwners` (with `CodeOwners.Rule`): `parse(_:)` reads the standard `CODEOWNERS` format (comments, blanks, `<pattern> @owner...`), translating gitignore-like patterns to `GlobPattern` syntax (`*` → `**`, leading `/` anchors, trailing `/` → `dir/**`, a bare name matches at any depth via `**/name`); `owners(for path:)` returns a path's owners with **last-match-wins** semantics (owner-less rule unsets; no match → `[]`). `standardLocations` lists `.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS`. A new `codeowners` signal in `RiskEngine.assessFile`: neutral (`0`) when no `CodeOwners` is supplied, `0.6` ("no CODEOWNERS owner") for an unowned changed file, `0` (detail lists owners) when owned. `RiskEngine.Weights` gains `codeowners` (`0.08`); the seven prior weights are scaled by `0.92` so the blend still sums to `1.0` with unchanged relative proportions. Both `Augur.assess(...)` overloads and `RiskEngine.assess(...)` gain an optional `codeOwners:` parameter (default `nil`). CLI: `check`/`gate` auto-discover a `CODEOWNERS` file at the standard locations and accept `--no-codeowners` to disable; the owner appears in the signal detail (human + JSON); `.augur.toml [weights] codeowners` is parseable in the CLI layer. `AugurKit` remains free of third-party dependencies.
 - v6: Path exclusions for generated/vendored files (`Glob.swift`, Foundation-only). New `Sendable` `GlobPattern` (a whole-path-anchored glob supporting `*` = any chars except `/`, `**` = any chars incl `/` and zero or more segments, `?` = one char; lowered to `NSRegularExpression` with all other metacharacters escaped) and `PathFilter` (a `[GlobPattern]` wrapper with `excludes(_:)` / `isEmpty`). `Augur.assess(...)` gains an optional `filter:` parameter on both overloads (default `nil`); matching files are dropped **before** scoring and recorded in the new `Assessment.excludedPaths` (sorted; `excludedCount` is its size). `RiskEngine.assess(...)` gains `excludedPaths:` (default `[]`) to carry the report through. Excluding all changed files throws `AugurError.noChanges`. CLI: `.augur.toml` gains `[exclude] paths = [...]` (parsed in the CLI layer); `check`/`gate` gain repeatable `--exclude <glob>` (added to configured excludes) and `--no-exclude` (ignore configured excludes; CLI globs still apply). The human reporter prints `excluded: N files` when any were excluded; JSON includes `excludedPaths`. `AugurKit` remains free of third-party dependencies.
 - v5: Two more coverage formats ingested by the existing `CoverageParser`, keeping `AugurKit` Foundation-only. **JaCoCo XML** (Kotlin/Java) via `parseJaCoCo(_:)`: a `<line nr ...>` under `<package name><sourcefile name>` is instrumented, covered when `ci` (covered instructions) > 0; the reported path is `package@name` + `/` + `sourcefile@name`, reconciled by the existing suffix matching. **Go coverprofile** (`go test -coverprofile`) via `parseGoProfile(_:)`: a `mode:` header then `path:start.col,end.col numStmts count` blocks; each block instruments lines `start...end` and covers them when `count > 0` (a line is covered if any covering block has `count > 0`). `CoverageParser.Format` gains `jacoco` and `go`; `detectFormat` recognizes JaCoCo (`<report>`+`<sourcefile>` markers / `jacoco`) and Go (`mode:` first line / `.out` extension), with LCOV and Cobertura detection unchanged. `--coverage <path>` now accepts all four formats; auto-detection at the repo root also looks for `jacoco.xml`, `cover.out`, and `coverage.out` (first found wins, logged to stderr). The `CoverageReport` query API and the engine's consumption are unchanged. `AugurKit` remains free of third-party dependencies.
