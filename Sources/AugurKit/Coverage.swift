@@ -175,15 +175,18 @@ public struct CoverageReport: Sendable, Equatable {
 
 // MARK: - Parsing
 
-/// Parses LCOV and Cobertura coverage reports into a `CoverageReport`.
+/// Parses LCOV, Cobertura, JaCoCo, and Go coverprofile reports into a
+/// `CoverageReport`.
 ///
-/// Foundation-only (LCOV by line parsing, Cobertura via `XMLParser`), so
-/// `AugurKit` stays dependency-free.
+/// Foundation-only (LCOV and Go coverprofile by line parsing, Cobertura and
+/// JaCoCo via `XMLParser`), so `AugurKit` stays dependency-free.
 public enum CoverageParser {
     /// The coverage report format.
     public enum Format: Sendable, Equatable {
         case lcov
         case cobertura
+        case jacoco
+        case go
     }
 
     /// Parsing failures surfaced to callers.
@@ -194,17 +197,20 @@ public enum CoverageParser {
         public var errorDescription: String? {
             switch self {
             case .undetectableFormat:
-                return "Could not detect coverage format (expected LCOV or Cobertura XML)."
+                return "Could not detect coverage format (expected LCOV, Cobertura/JaCoCo XML, or Go coverprofile)."
             case .malformedXML(let detail):
-                return "Malformed Cobertura XML: \(detail)"
+                return "Malformed coverage XML: \(detail)"
             }
         }
     }
 
     /// Detects the format from a file path and/or its contents.
     ///
-    /// `.info` → LCOV, `.xml` → Cobertura; otherwise content sniffing: a leading
-    /// `<?xml` or a `<coverage` tag → Cobertura, an `SF:`/`DA:` marker → LCOV.
+    /// Extension hints first: `.info` → LCOV, `.out` → Go coverprofile, `.xml` →
+    /// Cobertura *unless* the body looks like JaCoCo. Otherwise content sniffing:
+    /// a first non-empty line beginning `mode:` → Go; XML mentioning `jacoco` or
+    /// containing `<report`/`<sourcefile` → JaCoCo; a leading `<?xml` or a
+    /// `<coverage` tag → Cobertura; an `SF:`/`DA:` marker → LCOV.
     /// - Parameters:
     ///   - path: The file path (may be empty when only content is known).
     ///   - contents: The file contents.
@@ -212,17 +218,44 @@ public enum CoverageParser {
     public static func detectFormat(path: String, contents: String) -> Format? {
         let lowerPath = path.lowercased()
         if lowerPath.hasSuffix(".info") { return .lcov }
-        if lowerPath.hasSuffix(".xml") { return .cobertura }
+        if lowerPath.hasSuffix(".out") { return .go }
+
+        // Go coverprofiles begin with a `mode:` line.
+        if isGoProfile(contents) { return .go }
 
         let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        let looksXML = trimmed.hasPrefix("<?xml") || trimmed.hasPrefix("<")
+        if looksXML || lowerPath.hasSuffix(".xml") {
+            // JaCoCo and Cobertura are both XML; disambiguate by their markers.
+            if isJaCoCo(contents) { return .jacoco }
+            if lowerPath.hasSuffix(".xml") || trimmed.contains("<coverage") { return .cobertura }
+        }
         if trimmed.hasPrefix("<?xml") || trimmed.contains("<coverage") { return .cobertura }
         if contents.contains("\nSF:") || contents.hasPrefix("SF:")
             || contents.contains("\nDA:") || contents.hasPrefix("DA:") { return .lcov }
         return nil
     }
 
+    /// Whether the contents' first non-empty line starts with `mode:` (Go).
+    private static func isGoProfile(_ contents: String) -> Bool {
+        for rawLine in contents.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            return line.hasPrefix("mode:")
+        }
+        return false
+    }
+
+    /// Whether the XML contents carry a JaCoCo signature (DOCTYPE/marker or the
+    /// `<report>`+`<sourcefile>` element pairing).
+    private static func isJaCoCo(_ contents: String) -> Bool {
+        if contents.contains("jacoco") || contents.contains("JACOCO") { return true }
+        return contents.contains("<report") && contents.contains("<sourcefile")
+    }
+
     /// Loads and parses a coverage file from disk, auto-detecting the format.
-    /// - Parameter path: The path to an LCOV (`.info`) or Cobertura (`.xml`) report.
+    /// - Parameter path: The path to a coverage report (LCOV `.info`, Cobertura
+    ///   or JaCoCo `.xml`, or a Go `.out` coverprofile).
     /// - Returns: The parsed `CoverageReport`.
     /// - Throws: `ParseError` on detection/parse failure, or an I/O error if the
     ///   file cannot be read.
@@ -246,6 +279,8 @@ public enum CoverageParser {
         switch format {
         case .lcov: return parseLCOV(contents)
         case .cobertura: return try parseCobertura(contents)
+        case .jacoco: return try parseJaCoCo(contents)
+        case .go: return parseGoProfile(contents)
         }
     }
 
@@ -313,6 +348,92 @@ public enum CoverageParser {
         }
         return CoverageReport(files: delegate.fileCoverages())
     }
+
+    // MARK: - JaCoCo
+
+    /// Parses a JaCoCo XML report (Kotlin/Java).
+    ///
+    /// Reads `<package name="...">` elements and their nested
+    /// `<sourcefile name="...">` with `<line nr="N" mi="M" ci="C"/>` rows. A line
+    /// is instrumented when it has a `line` element and covered when `ci`
+    /// (covered instructions) > 0. The reported file path is `package@name` + `/`
+    /// + `sourcefile@name` (e.g. `com/foo` + `Bar.kt` → `com/foo/Bar.kt`),
+    /// reconciled with diff paths by the existing suffix matching.
+    /// - Parameter contents: The JaCoCo XML text.
+    /// - Returns: The parsed report.
+    /// - Throws: `ParseError.malformedXML` if the document cannot be parsed.
+    public static func parseJaCoCo(_ contents: String) throws -> CoverageReport {
+        let data = Data(contents.utf8)
+        let parser = XMLParser(data: data)
+        // JaCoCo documents carry a DOCTYPE/DTD reference; never resolve it.
+        parser.shouldResolveExternalEntities = false
+        let delegate = JaCoCoDelegate()
+        parser.delegate = delegate
+        guard parser.parse() else {
+            let reason = parser.parserError.map { String(describing: $0) } ?? "unknown error"
+            throw ParseError.malformedXML(reason)
+        }
+        return CoverageReport(files: delegate.fileCoverages())
+    }
+
+    // MARK: - Go coverprofile
+
+    /// Parses a Go coverprofile (`go test -coverprofile=cover.out`).
+    ///
+    /// The first non-empty line is `mode: set|count|atomic`; each subsequent line
+    /// is `path/file.go:startLine.startCol,endLine.endCol numStmts count`. Every
+    /// line in `startLine...endLine` is instrumented; the block is covered when
+    /// `count` > 0. Blocks accumulate per file, so a line is covered when *any*
+    /// block over it has `count` > 0.
+    /// - Parameter contents: The coverprofile text.
+    /// - Returns: The parsed report.
+    public static func parseGoProfile(_ contents: String) -> CoverageReport {
+        var perFile: [String: (instrumented: Set<Int>, covered: Set<Int>)] = [:]
+
+        for rawLine in contents.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("mode:") { continue }
+            guard let block = parseGoBlock(line) else { continue }
+            var entry = perFile[block.path] ?? (instrumented: [], covered: [])
+            for number in block.startLine...block.endLine {
+                entry.instrumented.insert(number)
+                if block.count > 0 { entry.covered.insert(number) }
+            }
+            perFile[block.path] = entry
+        }
+
+        let files = perFile.map { path, value in
+            CoverageReport.FileCoverage(path: path, instrumented: value.instrumented, covered: value.covered)
+        }
+        return CoverageReport(files: files)
+    }
+
+    /// Parses one Go coverprofile block line:
+    /// `path/file.go:startLine.startCol,endLine.endCol numStmts count`.
+    /// The file path may itself contain colons on some platforms, so the
+    /// position span is split from the *last* colon.
+    /// - Parameter line: The trimmed block line.
+    /// - Returns: The parsed block, or `nil` if it is malformed.
+    static func parseGoBlock(_ line: String) -> (path: String, startLine: Int, endLine: Int, count: Int)? {
+        guard let colonIndex = line.lastIndex(of: ":") else { return nil }
+        let path = String(line[line.startIndex..<colonIndex])
+        let rest = line[line.index(after: colonIndex)...]
+        guard !path.isEmpty else { return nil }
+
+        // rest = "startLine.startCol,endLine.endCol numStmts count"
+        let fields = rest.split(separator: " ", omittingEmptySubsequences: true)
+        guard fields.count >= 3, let count = Int(fields[fields.count - 1]) else { return nil }
+        let span = fields[0]
+        let endpoints = span.split(separator: ",", omittingEmptySubsequences: false)
+        guard endpoints.count == 2 else { return nil }
+        guard
+            let startLine = Int(endpoints[0].split(separator: ".").first ?? ""),
+            let endLine = Int(endpoints[1].split(separator: ".").first ?? ""),
+            startLine >= 1,
+            endLine >= startLine
+        else { return nil }
+        return (path: path, startLine: startLine, endLine: endLine, count: count)
+    }
 }
 
 // MARK: - Cobertura XML Delegate
@@ -360,6 +481,82 @@ private final class CoberturaDelegate: NSObject, XMLParserDelegate {
         if elementName == "class" {
             currentFilename = nil
         }
+    }
+
+    func fileCoverages() -> [CoverageReport.FileCoverage] {
+        perFile.map { path, value in
+            CoverageReport.FileCoverage(path: path, instrumented: value.instrumented, covered: value.covered)
+        }
+    }
+}
+
+// MARK: - JaCoCo XML Delegate
+
+/// Accumulates per-sourcefile line coverage while parsing a JaCoCo document.
+///
+/// The active `<package name>` is prepended to each `<sourcefile name>` to form
+/// the reported path. A `<line>` row is instrumented; covered when `ci` > 0.
+private final class JaCoCoDelegate: NSObject, XMLParserDelegate {
+    private var perFile: [String: (instrumented: Set<Int>, covered: Set<Int>)] = [:]
+    private var currentPackage: String?
+    private var currentPath: String?
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String]
+    ) {
+        switch elementName {
+        case "package":
+            currentPackage = attributeDict["name"]
+        case "sourcefile":
+            guard let name = attributeDict["name"] else { return }
+            let path = Self.joinPath(package: currentPackage, sourcefile: name)
+            currentPath = path
+            if perFile[path] == nil {
+                perFile[path] = (instrumented: [], covered: [])
+            }
+        case "line":
+            guard
+                let path = currentPath,
+                let numberText = attributeDict["nr"],
+                let number = Int(numberText)
+            else { return }
+            let coveredInstructions = Int(attributeDict["ci"] ?? "0") ?? 0
+            perFile[path, default: (instrumented: [], covered: [])].instrumented.insert(number)
+            if coveredInstructions > 0 {
+                perFile[path, default: (instrumented: [], covered: [])].covered.insert(number)
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        switch elementName {
+        case "sourcefile":
+            currentPath = nil
+        case "package":
+            currentPackage = nil
+        default:
+            break
+        }
+    }
+
+    /// Joins a JaCoCo `package@name` and `sourcefile@name` into a path, tolerating
+    /// a missing/empty package and any trailing slash on the package name.
+    static func joinPath(package: String?, sourcefile: String) -> String {
+        guard var pkg = package, !pkg.isEmpty else { return sourcefile }
+        while pkg.hasSuffix("/") { pkg.removeLast() }
+        guard !pkg.isEmpty else { return sourcefile }
+        return "\(pkg)/\(sourcefile)"
     }
 
     func fileCoverages() -> [CoverageReport.FileCoverage] {

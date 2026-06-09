@@ -39,14 +39,15 @@ struct ConfigOptions: ParsableArguments {
 }
 
 struct CoverageOptions: ParsableArguments {
-    @Option(name: .long, help: "Path to a coverage report (LCOV .info or Cobertura .xml) to sharpen the test-gap signal per line.")
+    @Option(name: .long, help: "Path to a coverage report (LCOV .info, Cobertura/JaCoCo .xml, or Go .out coverprofile) to sharpen the test-gap signal per line.")
     var coverage: String?
 
-    @Flag(name: .long, help: "Disable coverage auto-detection of lcov.info / coverage.xml at the repo root.")
+    @Flag(name: .long, help: "Disable coverage auto-detection at the repo root.")
     var noCoverage = false
 
-    /// Standard report filenames auto-detected at the repository root.
-    static let autoDetectNames = ["lcov.info", "coverage.xml"]
+    /// Standard report filenames auto-detected at the repository root, in
+    /// precedence order (the first that exists wins, logged to stderr).
+    static let autoDetectNames = ["lcov.info", "coverage.xml", "jacoco.xml", "cover.out", "coverage.out"]
 
     /// Resolves a coverage report from `--coverage`, else by auto-detecting a
     /// standard filename at the repo root (unless `--no-coverage`). Prints a

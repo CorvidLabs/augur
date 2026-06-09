@@ -90,7 +90,7 @@ augur check --cached                # reuse the cache instead of re-walking git 
 augur check --config ./my.toml      # use an explicit .augur.toml
 augur check --no-config             # ignore any .augur.toml; use built-in defaults
 
-augur check --coverage lcov.info    # sharpen test-gap with a coverage report
+augur check --coverage lcov.info    # sharpen test-gap with a coverage report (LCOV/Cobertura/JaCoCo/Go)
 augur check --no-coverage           # disable coverage auto-detection
 ```
 
@@ -103,11 +103,26 @@ of the change's *added* lines that are actually covered:
 ```sh
 augur check --coverage lcov.info      # LCOV
 augur check --coverage coverage.xml   # Cobertura XML
+augur check --coverage jacoco.xml     # JaCoCo XML (Kotlin/Java)
+augur check --coverage cover.out      # Go coverprofile (go test -coverprofile)
 ```
 
-augur also **auto-detects** `lcov.info` or `coverage.xml` at the repo root when `--coverage`
-is absent; pass `--no-coverage` to disable that, or `--coverage <path>` to point elsewhere.
-The format is detected by extension (`.info` → LCOV, `.xml` → Cobertura) then by content.
+Four formats are supported, all parsed in `AugurKit` with Foundation only (no third-party
+dependency):
+
+| Format | Typical name | How a line is instrumented / covered |
+|--------|--------------|--------------------------------------|
+| **LCOV** | `lcov.info` | `DA:<line>,<hits>` — covered when `hits > 0`. |
+| **Cobertura** | `coverage.xml` | `<line number hits>` — covered when `hits > 0`. |
+| **JaCoCo** | `jacoco.xml` | `<line nr mi ci>` under `<package><sourcefile>` — covered when `ci` (covered instructions) `> 0`; path is `package@name`/`sourcefile@name`. |
+| **Go coverprofile** | `cover.out` | `path:start.col,end.col stmts count` blocks — every line in `start…end`; covered when *any* covering block has `count > 0`. |
+
+augur also **auto-detects** a report at the repo root when `--coverage` is absent, trying these
+names in order and using the **first** that exists (logged to stderr): `lcov.info`,
+`coverage.xml`, `jacoco.xml`, `cover.out`, `coverage.out`. Pass `--no-coverage` to disable
+that, or `--coverage <path>` to point elsewhere. The format is detected by extension (`.info`
+→ LCOV, `.out` → Go, `.xml` → Cobertura/JaCoCo) then by content (JaCoCo is distinguished from
+Cobertura by its `<report>`/`<sourcefile>` markers; a Go profile by its leading `mode:` line).
 
 Precise behavior, per non-test, non-binary code file:
 
