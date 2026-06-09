@@ -1,0 +1,14 @@
+[1maugur[0m · [2mmain..HEAD[0m
+
+  [1mverdict[0m     [33m[!][0m [33mREVIEW[0m
+  [1mrisk[0m        [[33m█████████[0m[2m░░░░░░░░░░░[0m]  44/100
+  [1mconfidence[0m  [36m56[0m/100
+  [1mcalibration[0m [36mweak[0m[2m (14 incidents / 180 commits)[0m
+
+  [1mfiles (1), riskiest first:[0m
+    [33m![0m [33m   44[0m  [36mSources/Core/Engine.swift[0m
+[2m          · churn: 150 lines changed[0m
+
+  [2mexcluded: 2 files[0m
+
+  [33m→ an agent should request human review before merging[0m

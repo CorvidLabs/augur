@@ -1,0 +1,10 @@
+[1maugur[0m · [2mmain..HEAD[0m
+
+  [1mverdict[0m     [32m[ok][0m [32mPROCEED[0m
+  [1mrisk[0m        [[32m██[0m[2m░░░░░░░░░░░░░░░░░░[0m]  12/100
+  [1mconfidence[0m  [36m88[0m/100
+  [1mcalibration[0m [36mhistory-backed[0m[2m (9 incidents / 400 commits)[0m
+
+  [1mfiles (1), riskiest first:[0m
+    [32m·[0m [32m   12[0m  [36mSources/Core/Formatter.swift[0m
+[2m          · churn: 18 lines changed[0m

@@ -38,23 +38,24 @@ const signals = [
           <Button href={`${base}docs/signals`} variant="secondary">See the signals</Button>
         </div>
         <p class="hero-fineprint">Build it: <code>swift build -c release</code> · macOS · Swift 6 · git</p>
+        <p class="hero-fineprint">Colored, TTY-aware output — <code>--color auto|always|never</code>, honors <code>NO_COLOR</code>; piped &amp; JSON stay plain.</p>
       </div>
       <div>
-        <Terminal title="augur check" ariaLabel="augur check terminal example">
+        <Terminal title="augur check" ariaLabel="augur check terminal example, colored output">
 <div class="term-line"><span class="term-prompt">$</span> augur check --range main..HEAD</div>
 <div class="term-line">&nbsp;</div>
-<div class="term-line"><span class="term-out">augur · main..HEAD</span></div>
+<div class="term-line"><span class="term-label">augur</span> <span class="term-dim">· main..HEAD</span></div>
 <div class="term-line">&nbsp;</div>
-<div class="term-line">&nbsp;&nbsp;verdict&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">[!] REVIEW</span></div>
-<div class="term-line">&nbsp;&nbsp;risk&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">[#########&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]&nbsp;&nbsp;45/100</span></div>
-<div class="term-line">&nbsp;&nbsp;confidence&nbsp;&nbsp;<span class="term-out">55/100</span></div>
-<div class="term-line">&nbsp;&nbsp;calibration <span class="term-out">history-backed (156 incidents / 500 commits)</span></div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-label">verdict</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review-b">[!] REVIEW</span></div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-label">risk</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<span class="meter-fill-review">██████████</span><span class="meter-track">░░░░░░░░░░</span>]&nbsp;&nbsp;50/100</div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-label">confidence</span>&nbsp;&nbsp;<span class="term-conf">50</span>/100</div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-label">calibration</span> <span class="term-conf">history-backed</span><span class="term-dim"> (156 incidents / 500 commits)</span></div>
 <div class="term-line">&nbsp;</div>
-<div class="term-line"><span class="term-out">&nbsp;&nbsp;files (1), riskiest first:</span></div>
-<div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">!</span>&nbsp;&nbsp;&nbsp;&nbsp;45&nbsp;&nbsp;src/auth/token.swift</div>
-<div class="term-line"><span class="term-comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· sensitivity: matches sensitive category 'auth'</span></div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-label">files (1), riskiest first:</span></div>
+<div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">!</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">50</span>&nbsp;&nbsp;<span class="term-path">src/auth/token.swift</span></div>
+<div class="term-line"><span class="term-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· sensitivity: matches sensitive category 'auth'</span></div>
 <div class="term-line">&nbsp;</div>
-<div class="term-line"><span class="term-review">&nbsp;&nbsp;→ an agent should request human review before merging</span><span class="blink"></span></div>
+<div class="term-line">&nbsp;&nbsp;<span class="term-review">→ an agent should request human review before merging</span><span class="blink"></span></div>
         </Terminal>
       </div>
     </div>

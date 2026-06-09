@@ -50,16 +50,28 @@ $ augur check --range main..HEAD
 augur · main..HEAD
 
   verdict     [!] REVIEW
-  risk        [#########           ]  45/100
-  confidence  55/100
+  risk        [##########          ]  50/100
+  confidence  50/100
   calibration history-backed (156 incidents / 500 commits)
 
   files (1), riskiest first:
-    !    45  src/auth/token.swift
+    !    50  src/auth/token.swift
           · sensitivity: matches sensitive category 'auth'
 
   → an agent should request human review before merging
 ```
+
+On a real terminal this is **colored**: the verdict is tinted by level
+(<span style="color:var(--proceed)">green&nbsp;proceed</span> ·
+<span style="color:var(--review)">amber&nbsp;review</span> ·
+<span style="color:var(--block)">red&nbsp;block</span>), the risk meter renders as a
+<span style="color:var(--review)">█</span><span style="color:var(--text-dim)">░</span>
+gauge tinted by the same scale, file paths are
+<span style="color:var(--term-cyan)">cyan</span>, and secondary detail is dimmed.
+Color is **TTY-aware**: `augur` emits plain text (exactly as shown above) whenever
+stdout is not a terminal — so piped, redirected, `--json`, and `--sarif` output
+stays clean and scriptable. Control it with `--color auto|always|never` (default
+`auto`), and `augur` honors the [`NO_COLOR`](https://no-color.org) convention.
 
 `check` always exits `0` — it reports, it does not gate.
 
