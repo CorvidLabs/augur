@@ -476,7 +476,7 @@ attest · recorded agent:claude on f0ec5e6256
   policy: requireHumanApprovalWhenVerdictAtLeast = review
 attest verify · [x] FAIL (1 commit checked)
   violations:
-    x f0ec5e6256  requireHumanApprovalWhenVerdictAtLeast: verdict is at least review but no attestation is human-approved
+    x f0ec5e6256  requireHumanApprovalWhenVerdictAtLeast: verdict is at least review on this commit but no attestation is human-approved
   attest verify -> exit 1   (only an agent attested a 'review' change)
 
 == 6) a human signs off, then attest verify PASSES ==
