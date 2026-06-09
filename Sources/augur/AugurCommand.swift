@@ -136,6 +136,40 @@ struct CodeOwnersOptions: ParsableArguments {
     }
 }
 
+// MARK: - Color options
+
+/// When ANSI color is applied to human-readable output.
+///
+/// `auto` enables color only when stdout is a TTY and `NO_COLOR` is unset
+/// (honoring https://no-color.org); `always` forces it; `never` disables it.
+enum ColorMode: String, ExpressibleByArgument, CaseIterable {
+    case auto
+    case always
+    case never
+}
+
+/// The `--color` option shared by commands with human-readable output.
+struct ColorOptions: ParsableArguments {
+    @Option(name: .long, help: "Colorize output: auto (TTY only), always, or never. Honors NO_COLOR.")
+    var color: ColorMode = .auto
+
+    /// Resolves whether to emit ANSI color, given the current process context.
+    ///
+    /// `auto` is enabled only when stdout is an interactive terminal and the
+    /// `NO_COLOR` environment variable is unset, so piped / redirected output
+    /// stays plain.
+    /// - Returns: `true` when color should be applied.
+    func enabled() -> Bool {
+        switch color {
+        case .never: return false
+        case .always: return true
+        case .auto:
+            if ProcessInfo.processInfo.environment["NO_COLOR"] != nil { return false }
+            return isatty(fileno(stdout)) == 1
+        }
+    }
+}
+
 struct ScopeOptions: ParsableArguments {
     @Option(name: .long, help: "A git range to assess, e.g. 'main..HEAD'.")
     var range: String?
@@ -177,6 +211,7 @@ struct Check: AsyncParsableCommand {
     @OptionGroup var coverageOptions: CoverageOptions
     @OptionGroup var excludeOptions: ExcludeOptions
     @OptionGroup var codeOwnersOptions: CodeOwnersOptions
+    @OptionGroup var colorOptions: ColorOptions
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -214,7 +249,7 @@ struct Check: AsyncParsableCommand {
             } else if json {
                 print(try assessment.jsonString())
             } else {
-                print(Reporter.render(assessment, verbose: verbose))
+                print(Reporter.render(assessment, verbose: verbose, color: colorOptions.enabled()))
             }
         } catch AugurError.noChanges {
             if wantsSarif {
