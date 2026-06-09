@@ -247,15 +247,84 @@ fledge run selfcheck # dogfood: run augur on its own changes
 The engine (`AugurKit`) has **zero third-party dependencies** and is fully testable without
 `git` via the `RepositoryProbe` protocol. The CLI uses `swift-argument-parser`.
 
+## Trust layer (augur → attest)
+
+A verdict from `augur` is *ephemeral* — it lives for one CI run and is gone. Its sibling
+[`attest`](https://github.com/CorvidLabs/attest) makes it durable: `attest` records *who or
+what reviewed a change, and at what confidence* as a signed-or-unsigned provenance note
+keyed to the commit SHA (stored in git notes), and gates CI / agent loops on a policy.
+**augur scores the risk; attest records the trust.** They compose over a pipe and never
+link to each other.
+
+```sh
+augur check --json | attest sign --from-augur -        # record the trust
+attest verify --policy .attest.json                     # gate on it
+```
+
+`attest sign --from-augur -` copies augur's `verdict` and maps its `riskScore` (0...100) to
+`confidence = 1 − riskScore/100`. A worked, end-to-end run — an agent attests a `review`
+change, a policy that demands human approval for `review`+ verdicts FAILs, then a human
+signs off and it PASSes — is in [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
+Verified output (real exit codes):
+
+```
+== 3) augur check --json | attest sign --from-augur - (agent records trust) ==
+attest · recorded agent:claude on f0ec5e6256
+
+== 5) attest verify — agent-only record FAILS the policy ==
+  policy: requireHumanApprovalWhenVerdictAtLeast = review
+attest verify · [x] FAIL (1 commit checked)
+  violations:
+    x f0ec5e6256  requireHumanApprovalWhenVerdictAtLeast: verdict is at least review but no attestation is human-approved
+  attest verify -> exit 1   (only an agent attested a 'review' change)
+
+== 6) a human signs off, then attest verify PASSES ==
+attest · recorded human:leif on f0ec5e6256
+attest verify · [ok] PASS (1 commit checked)
+  attest verify -> exit 0   (human approval now satisfies the policy)
+```
+
+The policy clears only when a *triggering* attestation (one whose verdict is at or above
+the threshold) is itself human-approved, so the human signs off carrying the same `review`
+verdict.
+
+### Reusable CI workflow
+
+[`examples/workflows/trust.yml`](examples/workflows/trust.yml) is a copy-paste GitHub Actions
+workflow other CorvidLabs repos can adopt. On `pull_request` it builds augur and runs
+`augur gate --range origin/<base>..HEAD --threshold block`, with commented-out steps showing
+exactly where `attest sign` / `attest verify` slot in.
+
+### Pre-commit hook
+
+[`examples/hooks/pre-commit`](examples/hooks/pre-commit) runs `augur gate --staged
+--threshold block` and refuses the commit on a `block` verdict (set `AUGUR_THRESHOLD=review`
+to also stop on review-grade changes). Install it from the repo root:
+
+```sh
+ln -s ../../examples/hooks/pre-commit .git/hooks/pre-commit
+# or copy it: install -m 0755 examples/hooks/pre-commit .git/hooks/pre-commit
+git commit --no-verify   # deliberately bypass for one commit
+```
+
+**Honest scope.** Everything here is **macOS-only** and runs on CorvidLabs' self-hosted
+**macOS ARM64** runners (`runs-on: [self-hosted, macOS]`). Both `trust.yml` and the
+demo build augur (and attest) *from a checkout* — there is no published binary yet, and
+**cross-repo tool packaging** (installing prebuilt augur / attest into a foreign repo
+without a Swift toolchain) is a deliberately deferred later step.
+
 ## Roadmap
 
 - [x] `augur calibrate` — cache the history model; report backing volume (`check --cached`).
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
 - [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
 - [x] Composite `action.yml` ("augur gate") for self-hosted macOS self-gating.
-- **`attest`** — signed provenance records keyed to commit SHAs: a verifiable trail of
+- [x] **`attest`** — signed provenance records keyed to commit SHAs: a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
-  `attest` records that trust.
+  `attest` records that trust. See [Trust layer](#trust-layer-augur--attest) above and
+  [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
+- Cross-repo tool packaging — ship prebuilt augur / attest binaries so foreign repos can gate
+  without a Swift toolchain (the composite actions and `trust.yml` build from a checkout today).
 
 ## License
 

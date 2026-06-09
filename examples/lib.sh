@@ -19,6 +19,28 @@ augur_bin() {
     echo "$root/.build/debug/augur"
 }
 
+# Locate the attest binary: prefer an installed one, else build it from the
+# sibling ../../attest checkout. Prints nothing and returns 1 if attest is
+# unavailable (so callers can skip gracefully on a machine without the repo).
+attest_bin() {
+    if command -v attest >/dev/null 2>&1; then
+        command -v attest
+        return 0
+    fi
+    local root attest_root
+    root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    attest_root="$(cd "$root/../attest" 2>/dev/null && pwd)" || return 1
+    [[ -d "$attest_root" ]] || return 1
+    if [[ ! -x "$attest_root/.build/release/attest" && ! -x "$attest_root/.build/debug/attest" ]]; then
+        ( cd "$attest_root" && swift build >/dev/null 2>&1 ) || return 1
+    fi
+    if [[ -x "$attest_root/.build/release/attest" ]]; then
+        echo "$attest_root/.build/release/attest"
+    else
+        echo "$attest_root/.build/debug/attest"
+    fi
+}
+
 # make_scratch_repo <dir>: create a fresh repo with a realistic history,
 # including a sensitive auth file and a Revert commit (an "incident").
 make_scratch_repo() {
