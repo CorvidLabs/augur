@@ -1,0 +1,23 @@
+# fledge.toml - augur project task definitions.
+# Docs: https://github.com/CorvidLabs/fledge#task-runner
+
+[tasks]
+build = "swift build"
+test = "swift test"
+release-build = "swift build -c release"
+spec = "fledge spec check"
+format = "fledge plugins run swift-format -- lint Sources Tests"
+check = "fledge run build && fledge run test && fledge run spec"
+ci = "fledge run check"
+
+[tasks.run]
+cmd = "swift run augur"
+description = "Build and run augur against the current repository"
+
+[tasks.install]
+cmd = "swift build -c release && install -m 0755 .build/release/augur /usr/local/bin/augur"
+description = "Build a release binary and install it to /usr/local/bin"
+
+[tasks.selfcheck]
+cmd = "swift run augur check"
+description = "Run augur on augur's own working-tree changes (dogfood)"
