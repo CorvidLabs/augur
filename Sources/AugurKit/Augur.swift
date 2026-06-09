@@ -22,16 +22,29 @@ public struct Augur: Sendable {
     ///   - now: Reference time for recency signals.
     ///   - coverage: An optional line-coverage report; when present it sharpens
     ///     the test-gap signal per changed line.
+    ///   - filter: An optional `PathFilter`; changed files matching any of its
+    ///     patterns are dropped before scoring and reported in
+    ///     `Assessment.excludedPaths`. `nil`/empty excludes nothing.
     /// - Returns: The assessment.
     public func assess(
         scope: DiffScope,
         now: Int = Int(Date().timeIntervalSince1970),
-        coverage: CoverageReport? = nil
+        coverage: CoverageReport? = nil,
+        filter: PathFilter? = nil
     ) throws -> Assessment {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
+        let (kept, excluded) = Self.partition(changed, filter: filter)
+        guard !kept.isEmpty else { throw AugurError.noChanges }
         let history = HistorySnapshot(commits: try probe.recentCommits(limit: historyLimit))
-        return engine.assess(scope: scope, changedFiles: changed, history: history, now: now, coverage: coverage)
+        return engine.assess(
+            scope: scope,
+            changedFiles: kept,
+            history: history,
+            now: now,
+            coverage: coverage,
+            excludedPaths: excluded
+        )
     }
 
     /// Assess a scope against a pre-built history snapshot (e.g. from a cache),
@@ -40,16 +53,48 @@ public struct Augur: Sendable {
     ///   - scope: The diff scope to assess.
     ///   - history: A snapshot, typically rebuilt from a `CalibrationCache`.
     ///   - now: Reference time for recency signals.
+    ///   - coverage: An optional line-coverage report.
+    ///   - filter: An optional `PathFilter`; matching files are dropped before
+    ///     scoring and reported in `Assessment.excludedPaths`.
     /// - Returns: The assessment.
     public func assess(
         scope: DiffScope,
         history: HistorySnapshot,
         now: Int = Int(Date().timeIntervalSince1970),
-        coverage: CoverageReport? = nil
+        coverage: CoverageReport? = nil,
+        filter: PathFilter? = nil
     ) throws -> Assessment {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
-        return engine.assess(scope: scope, changedFiles: changed, history: history, now: now, coverage: coverage)
+        let (kept, excluded) = Self.partition(changed, filter: filter)
+        guard !kept.isEmpty else { throw AugurError.noChanges }
+        return engine.assess(
+            scope: scope,
+            changedFiles: kept,
+            history: history,
+            now: now,
+            coverage: coverage,
+            excludedPaths: excluded
+        )
+    }
+
+    /// Splits changed files into those kept and the paths excluded by `filter`.
+    /// A `nil` or empty filter keeps everything (no exclusions).
+    private static func partition(
+        _ changed: [ChangedFile],
+        filter: PathFilter?
+    ) -> (kept: [ChangedFile], excluded: [String]) {
+        guard let filter, !filter.isEmpty else { return (changed, []) }
+        var kept: [ChangedFile] = []
+        var excluded: [String] = []
+        for file in changed {
+            if filter.excludes(file.path) {
+                excluded.append(file.path)
+            } else {
+                kept.append(file)
+            }
+        }
+        return (kept, excluded)
     }
 
     /// Walks history once and returns a `CalibrationCache` pinned to the current `HEAD`.

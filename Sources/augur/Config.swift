@@ -36,10 +36,15 @@ struct AugurConfig: Decodable, Sendable {
         var replaceDefaults: Bool?
     }
 
+    struct ExcludeConfig: Decodable, Sendable {
+        var paths: [String]?
+    }
+
     var thresholds: ThresholdsConfig?
     var weights: WeightsConfig?
     var rules: [RuleConfig]?
     var sensitivity: SensitivityConfig?
+    var exclude: ExcludeConfig?
 
     // MARK: - Resolution
 
@@ -79,6 +84,11 @@ struct AugurConfig: Decodable, Sendable {
         return SensitivityRuleset.default + custom
     }
 
+    /// The configured exclusion globs (`[exclude] paths = [...]`), or `[]`.
+    func resolvedExcludes() -> [String] {
+        exclude?.paths ?? []
+    }
+
     /// Builds a `RiskEngine` from this configuration.
     func makeEngine() -> RiskEngine {
         RiskEngine(weights: resolvedWeights(), rules: resolvedRules(), thresholds: resolvedThresholds())
@@ -106,13 +116,13 @@ enum ConfigLoader {
     ///   - explicitPath: A `--config <path>` override, if any.
     ///   - disabled: Whether `--no-config` was passed.
     ///   - repoPath: The repository root (the `-C` path).
-    /// - Returns: A resolved engine and the path that was loaded (for messaging),
-    ///   or `nil` when no config applies.
+    /// - Returns: A resolved engine, its exclusion globs, and the path that was
+    ///   loaded (for messaging), or `nil` when no config applies.
     static func load(
         explicitPath: String?,
         disabled: Bool,
         repoPath: String
-    ) throws -> (engine: RiskEngine, source: String)? {
+    ) throws -> (engine: RiskEngine, excludes: [String], source: String)? {
         if disabled { return nil }
 
         let fileManager = FileManager.default
@@ -135,7 +145,7 @@ enum ConfigLoader {
         } catch {
             throw ConfigError.invalid(path: path, underlying: String(describing: error))
         }
-        return (config.makeEngine(), path)
+        return (config.makeEngine(), config.resolvedExcludes(), path)
     }
 }
 

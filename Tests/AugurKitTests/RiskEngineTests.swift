@@ -219,6 +219,58 @@ final class RiskEngineTests: XCTestCase {
         XCTAssertEqual(cache.band, "history-backed")
     }
 
+    // MARK: - Path exclusions
+
+    func testExcludedFilesAreDroppedFromAssessment() throws {
+        let probe = FixtureProbe(
+            changed: [
+                ChangedFile(path: "src/service.swift", linesAdded: 10, linesDeleted: 2, isBinary: false),
+                ChangedFile(path: "vendor/lib/huge.swift", linesAdded: 9000, linesDeleted: 0, isBinary: false),
+                ChangedFile(path: "Sources/App/Model.generated.swift", linesAdded: 500, linesDeleted: 0, isBinary: false),
+            ],
+            commits: manyBenignCommits()
+        )
+        let filter = PathFilter(globs: ["vendor/**", "**/*.generated.swift"])
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: filter)
+
+        // Kept file is present; excluded files are absent from the scored set.
+        XCTAssertEqual(assessment.files.map(\.path), ["src/service.swift"])
+        XCTAssertFalse(assessment.files.contains { $0.path.hasPrefix("vendor/") })
+
+        // Excluded paths are reported (sorted) and counted.
+        XCTAssertEqual(assessment.excludedPaths, ["Sources/App/Model.generated.swift", "vendor/lib/huge.swift"])
+        XCTAssertEqual(assessment.excludedCount, 2)
+    }
+
+    func testExcludingAllFilesYieldsNoChanges() {
+        let probe = FixtureProbe(
+            changed: [
+                ChangedFile(path: "vendor/a.swift", linesAdded: 10, linesDeleted: 0, isBinary: false),
+                ChangedFile(path: "vendor/b.swift", linesAdded: 10, linesDeleted: 0, isBinary: false),
+            ],
+            commits: manyBenignCommits()
+        )
+        let filter = PathFilter(globs: ["vendor/**"])
+        XCTAssertThrowsError(try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: filter)) { error in
+            guard case AugurError.noChanges = error else {
+                return XCTFail("expected AugurError.noChanges, got \(error)")
+            }
+        }
+    }
+
+    func testNilFilterIsBehaviorPreserving() throws {
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "vendor/a.swift", linesAdded: 10, linesDeleted: 0, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let unfiltered = try Augur(probe: probe).assess(scope: .workingTree, now: now)
+        let nilFiltered = try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: nil)
+        let emptyFiltered = try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: PathFilter(globs: []))
+        XCTAssertEqual(unfiltered, nilFiltered)
+        XCTAssertEqual(unfiltered, emptyFiltered)
+        XCTAssertTrue(unfiltered.excludedPaths.isEmpty)
+    }
+
     // MARK: - Fixtures
 
     private func manyBenignCommits() -> [Commit] {

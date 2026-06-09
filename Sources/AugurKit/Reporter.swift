@@ -28,6 +28,10 @@ public enum Reporter {
                 }
             }
         }
+        if !assessment.excludedPaths.isEmpty {
+            lines.append("")
+            lines.append("  excluded: \(assessment.excludedPaths.count) file\(assessment.excludedPaths.count == 1 ? "" : "s")")
+        }
         if v != .proceed {
             lines.append("")
             lines.append("  → \(advice(v))")
