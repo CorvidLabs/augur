@@ -30,11 +30,46 @@ struct ConfigOptions: ParsableArguments {
     /// Resolves the engine from config, printing a one-line note to stderr when a
     /// config file is applied so the effect is visible.
     func resolvedEngine(repoPath: String) throws -> RiskEngine {
+        try resolved(repoPath: repoPath).engine
+    }
+
+    /// Resolves the engine and the config's exclusion globs, printing a one-line
+    /// note to stderr when a config file is applied so the effect is visible.
+    func resolved(repoPath: String) throws -> (engine: RiskEngine, excludes: [String]) {
         guard let resolved = try ConfigLoader.load(explicitPath: config, disabled: noConfig, repoPath: repoPath) else {
-            return RiskEngine()
+            return (RiskEngine(), [])
         }
         Diagnostics.note("config: loaded \(resolved.source)")
-        return resolved.engine
+        return (resolved.engine, resolved.excludes)
+    }
+}
+
+// MARK: - Exclusion options
+
+/// Path-exclusion options shared by `check` and `gate`. Excluded files are
+/// dropped from the assessment before scoring and reported as `excluded`.
+struct ExcludeOptions: ParsableArguments {
+    @Option(name: .long, help: "A glob to exclude from the assessment (repeatable; e.g. 'vendor/**'). Added to any configured excludes.")
+    var exclude: [String] = []
+
+    @Flag(name: .long, help: "Ignore excludes configured in .augur.toml (CLI --exclude globs still apply).")
+    var noExclude = false
+
+    /// Builds the effective `PathFilter` from configured + ad-hoc globs.
+    ///
+    /// Configured globs (from `.augur.toml [exclude]`) are honored unless
+    /// `--no-exclude` is passed; CLI `--exclude` globs always apply. The result
+    /// is `nil` when no patterns apply (so nothing is excluded). A one-line note
+    /// is printed to stderr when any pattern is active.
+    /// - Parameter configured: Globs resolved from the loaded config.
+    /// - Returns: A `PathFilter`, or `nil` when no patterns apply.
+    func resolvedFilter(configured: [String]) -> PathFilter? {
+        var globs: [String] = []
+        if !noExclude { globs += configured }
+        globs += exclude
+        guard !globs.isEmpty else { return nil }
+        Diagnostics.note("exclude: \(globs.count) pattern(s) active")
+        return PathFilter(globs: globs)
     }
 }
 
@@ -89,10 +124,17 @@ struct ScopeOptions: ParsableArguments {
     }
 
     func makeAugur(config: ConfigOptions) throws -> (Augur, DiffScope) {
+        let (augur, scope, _) = try makeAugurWithExcludes(config: config)
+        return (augur, scope)
+    }
+
+    /// Like `makeAugur(config:)` but also returns the config's exclusion globs so
+    /// callers can build a `PathFilter` combining them with CLI `--exclude`.
+    func makeAugurWithExcludes(config: ConfigOptions) throws -> (Augur, DiffScope, [String]) {
         let repo = GitRepository(path: path)
         try repo.validate()
-        let engine = try config.resolvedEngine(repoPath: path)
-        return (Augur(probe: repo, engine: engine), resolvedScope())
+        let resolved = try config.resolved(repoPath: path)
+        return (Augur(probe: repo, engine: resolved.engine), resolvedScope(), resolved.excludes)
     }
 }
 
@@ -104,6 +146,7 @@ struct Check: AsyncParsableCommand {
     @OptionGroup var scope: ScopeOptions
     @OptionGroup var configOptions: ConfigOptions
     @OptionGroup var coverageOptions: CoverageOptions
+    @OptionGroup var excludeOptions: ExcludeOptions
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -130,10 +173,11 @@ struct Check: AsyncParsableCommand {
     }
 
     func run() async throws {
-        let (augur, diffScope) = try scope.makeAugur(config: configOptions)
+        let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
+        let filter = excludeOptions.resolvedFilter(configured: configExcludes)
         do {
-            let assessment = try assess(augur, scope: diffScope, coverage: coverage)
+            let assessment = try assess(augur, scope: diffScope, coverage: coverage, filter: filter)
             if wantsSarif {
                 try emitSarif(assessment, augur: augur, scope: diffScope)
             } else if json {
@@ -152,7 +196,7 @@ struct Check: AsyncParsableCommand {
                 )
                 try emitSarif(empty, augur: augur, scope: diffScope)
             } else if json {
-                print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[]}")
+                print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[],\"excludedPaths\":[]}")
             } else {
                 print("augur · no changes to assess")
             }
@@ -176,16 +220,21 @@ struct Check: AsyncParsableCommand {
         }
     }
 
-    private func assess(_ augur: Augur, scope diffScope: DiffScope, coverage: CoverageReport?) throws -> Assessment {
-        guard cached else { return try augur.assess(scope: diffScope, coverage: coverage) }
+    private func assess(
+        _ augur: Augur,
+        scope diffScope: DiffScope,
+        coverage: CoverageReport?,
+        filter: PathFilter?
+    ) throws -> Assessment {
+        guard cached else { return try augur.assess(scope: diffScope, coverage: coverage, filter: filter) }
         guard let cache = CacheStore.load(repoPath: scope.path) else {
             Diagnostics.note("no cache found at \(CacheStore.path(repoPath: scope.path)); computing live. Run `augur calibrate` first.")
-            return try augur.assess(scope: diffScope, coverage: coverage)
+            return try augur.assess(scope: diffScope, coverage: coverage, filter: filter)
         }
         if let head = try? augur.currentHead(), !head.isEmpty, !cache.head.isEmpty, head != cache.head {
             Diagnostics.note("cache is stale (calibrated at \(cache.head.prefix(8)), HEAD is \(head.prefix(8))); results may be outdated.")
         }
-        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache), coverage: coverage)
+        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache), coverage: coverage, filter: filter)
     }
 }
 
@@ -199,6 +248,7 @@ struct Gate: AsyncParsableCommand {
     @OptionGroup var scope: ScopeOptions
     @OptionGroup var configOptions: ConfigOptions
     @OptionGroup var coverageOptions: CoverageOptions
+    @OptionGroup var excludeOptions: ExcludeOptions
 
     @Option(name: .long, help: "Threshold verdict: proceed, review, or block.")
     var threshold: String = "review"
@@ -210,11 +260,12 @@ struct Gate: AsyncParsableCommand {
         guard let limit = Verdict(rawValue: threshold) else {
             throw ValidationError("threshold must be one of: proceed, review, block")
         }
-        let (augur, diffScope) = try scope.makeAugur(config: configOptions)
+        let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
+        let filter = excludeOptions.resolvedFilter(configured: configExcludes)
         let assessment: Assessment
         do {
-            assessment = try augur.assess(scope: diffScope, coverage: coverage)
+            assessment = try augur.assess(scope: diffScope, coverage: coverage, filter: filter)
         } catch AugurError.noChanges {
             return  // nothing to gate
         }

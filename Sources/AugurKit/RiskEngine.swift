@@ -46,7 +46,8 @@ public struct RiskEngine: Sendable {
         changedFiles: [ChangedFile],
         history: HistorySnapshot,
         now: Int,
-        coverage: CoverageReport? = nil
+        coverage: CoverageReport? = nil,
+        excludedPaths: [String] = []
     ) -> Assessment {
         let calibration = Calibration(
             confidence: Self.calibrationConfidence(totalCommits: history.totalCommits, incidentCommits: history.incidentCommits),
@@ -82,7 +83,8 @@ public struct RiskEngine: Sendable {
             verdict: verdict,
             calibration: calibration,
             thresholds: thresholds,
-            files: files.sorted { $0.riskScore > $1.riskScore }
+            files: files.sorted { $0.riskScore > $1.riskScore },
+            excludedPaths: excludedPaths.sorted()
         )
     }
 

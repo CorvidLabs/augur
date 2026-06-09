@@ -45,6 +45,14 @@
 - [x] Tests: JaCoCo + Go parsing (counts, path assembly, multi/overlapping blocks), `detectFormat`, and covered-vs-uncovered scoring under each new format (46 tests total).
 - [x] Example `examples/08-coverage-formats.sh` demonstrating JaCoCo and Go coverprofile lowering risk on covered changed lines.
 
+## Done (v6)
+
+- [x] Glob matcher in `AugurKit` (`Glob.swift`, Foundation-only): `GlobPattern` (`*` / `**` / `?`, whole-path anchored, compiled to `NSRegularExpression`) and `PathFilter` (`[GlobPattern]` wrapper with `excludes(_:)`).
+- [x] `Augur.assess(...)` gains an optional `filter:`; matching files are dropped before scoring and recorded in `Assessment.excludedPaths` (sorted, `excludedCount`). Excluding all files throws `noChanges`.
+- [x] `.augur.toml [exclude] paths = [...]` (CLI layer); `check`/`gate` gain repeatable `--exclude <glob>` and `--no-exclude`; reporter prints `excluded: N files`, JSON includes `excludedPaths`.
+- [x] Tests: glob `*`/`**`/`?`, anchoring, directory globs, non-matches; assessment exclusion + exclude-all-yields-no-changes + nil-filter behavior-preserving (63 tests total).
+- [x] Example `examples/09-exclude.sh` (excluding a vendored/generated path changes the assessment).
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).
