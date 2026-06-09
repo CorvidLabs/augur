@@ -14,7 +14,7 @@ public enum Reporter {
         lines.append("")
         lines.append("  files (\(assessment.files.count)), riskiest first:")
         for file in assessment.files {
-            let marker = dot(file.verdict)
+            let marker = dot(file.verdict(thresholds: assessment.thresholds))
             let score = fmt(file.riskScore).leftPadded(to: 5)
             lines.append("    " + marker + " " + score + "  " + file.path)
             if verbose {

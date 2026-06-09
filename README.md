@@ -81,6 +81,58 @@ augur check -v                      # show every contributing signal
 
 augur gate --threshold review       # exit 1 if verdict >= review (CI / agent loops)
 augur explain                       # optional AI explanation via fledge
+
+augur calibrate                     # cache the history model to .augur/cache.json
+augur check --cached                # reuse the cache instead of re-walking git log
+
+augur check --config ./my.toml      # use an explicit .augur.toml
+augur check --no-config             # ignore any .augur.toml; use built-in defaults
+```
+
+### Configuration (`.augur.toml`)
+
+Drop an `.augur.toml` at the repo root and `augur` discovers it automatically (override
+with `--config <path>`, ignore with `--no-config`). Every section is optional — an absent
+file means built-in defaults, so configuration is strictly additive. It is parsed in the
+CLI layer only; the engine library stays dependency-free.
+
+```toml
+# Verdict cutoffs (0...100). score >= block -> block; >= review -> review; else proceed.
+# Defaults: review = 35, block = 65.
+[thresholds]
+review = 35
+block = 65
+
+# Signal weights for the heuristic prior. Only listed keys are overridden.
+[weights]
+sensitivity = 0.25
+test_gap = 0.20
+
+# Set true to use ONLY the custom rules below; default false MERGES them onto the built-ins.
+[sensitivity]
+replace_defaults = false
+
+# Custom sensitivity rules: flag paths containing any fragment with the given risk (0...1).
+[[rules]]
+label = "internal-api"
+risk = 0.7
+fragments = ["internal/", "private/"]
+```
+
+A worked, commented config and runnable scripts live in [`examples/`](examples/).
+
+### Calibrate & cache
+
+`augur calibrate` walks git history once and writes a serializable model to
+`.augur/cache.json` (pinned to the current `HEAD`), reporting the backing volume and
+calibration band. `augur check --cached` then reuses that model instead of re-running
+`git log` — ideal for tight agent loops. If `HEAD` has moved since calibration, `check
+--cached` prints a staleness warning to stderr but stays usable; with no cache it falls
+back to live computation. `.augur/` is git-ignored and never committed.
+
+```sh
+augur calibrate           # -> .augur/cache.json (HEAD-pinned)
+augur check --cached      # fast path; warns on stderr if stale
 ```
 
 ### In CI
@@ -105,6 +157,7 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
   "verdict": "review",
   "confidence": 55.0,
   "calibration": { "confidence": 1.0, "totalCommits": 500, "incidentCommits": 156 },
+  "thresholds": { "review": 35.0, "block": 65.0 },
   "files": [
     { "path": "src/auth/token.swift", "riskScore": 45.0, "signals": [ /* ... */ ] }
   ]
@@ -125,9 +178,9 @@ The engine (`AugurKit`) has **zero third-party dependencies** and is fully testa
 
 ## Roadmap
 
-- `augur calibrate` — cache the history model; report backing volume.
-- Configurable sensitivity rules (`.augur.toml`).
-- Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision.
+- [x] `augur calibrate` — cache the history model; report backing volume (`check --cached`).
+- [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
+- [ ] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision.
 - **`attest`** — signed provenance records keyed to commit SHAs: a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
   `attest` records that trust.

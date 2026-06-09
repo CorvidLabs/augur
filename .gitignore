@@ -4,3 +4,5 @@ DerivedData/
 *.xcodeproj/
 .swiftpm/
 .netrc
+# augur's local calibration cache (not committed; regenerate with `augur calibrate`).
+.augur/

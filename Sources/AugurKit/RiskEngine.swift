@@ -8,7 +8,7 @@
 ///     repository's own revert/hotfix record backs it.
 public struct RiskEngine: Sendable {
     /// Documented prior weights for each signal. Sum to 1.0.
-    public struct Weights: Sendable {
+    public struct Weights: Sendable, Equatable, Codable {
         public var sensitivity = 0.22
         public var testGap = 0.18
         public var churn = 0.15
@@ -22,10 +22,21 @@ public struct RiskEngine: Sendable {
 
     private let weights: Weights
     private let rules: [SensitivityRule]
+    private let thresholds: Thresholds
 
-    public init(weights: Weights = Weights(), rules: [SensitivityRule] = SensitivityRuleset.default) {
+    /// Constructs the engine.
+    /// - Parameters:
+    ///   - weights: Prior weights for each signal (sum to 1.0).
+    ///   - rules: Sensitivity rules matched against changed paths.
+    ///   - thresholds: Risk-score cutoffs mapping a score to a `Verdict`.
+    public init(
+        weights: Weights = Weights(),
+        rules: [SensitivityRule] = SensitivityRuleset.default,
+        thresholds: Thresholds = .default
+    ) {
         self.weights = weights
         self.rules = rules
+        self.thresholds = thresholds
     }
 
     // MARK: - Assessment
@@ -57,7 +68,7 @@ public struct RiskEngine: Sendable {
         }
 
         let overall = Self.aggregate(files: files)
-        var verdict = Verdict.from(riskScore: overall)
+        var verdict = Verdict.from(riskScore: overall, thresholds: thresholds)
         // A single very-hot file escalates the whole change.
         if let worst = files.map(\.riskScore).max(), worst >= 80 {
             verdict = max(verdict, .block)
@@ -68,6 +79,7 @@ public struct RiskEngine: Sendable {
             riskScore: overall,
             verdict: verdict,
             calibration: calibration,
+            thresholds: thresholds,
             files: files.sorted { $0.riskScore > $1.riskScore }
         )
     }

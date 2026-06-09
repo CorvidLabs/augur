@@ -12,6 +12,15 @@ public protocol RepositoryProbe: Sendable {
 
     /// Recent commits (newest first), the basis for all history-derived signals.
     func recentCommits(limit: Int) throws -> [Commit]
+
+    /// The current `HEAD` commit SHA, used to pin and detect stale calibration caches.
+    func headSHA() throws -> String
+}
+
+extension RepositoryProbe {
+    /// Default: probes without a real repository (e.g. test fixtures) report an
+    /// empty SHA, which callers treat as "unknown HEAD".
+    public func headSHA() throws -> String { "" }
 }
 
 // MARK: - Git Implementation
@@ -50,6 +59,11 @@ public struct GitRepository: RepositoryProbe {
         let args = ["log", "-n", String(limit), "--no-merges", "--pretty=format:\(format)", "--name-only"]
         let output = try run(args, allowFailure: true)
         return Self.parseLog(output)
+    }
+
+    public func headSHA() throws -> String {
+        let output = try run(["rev-parse", "HEAD"], allowFailure: true)
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Parsing

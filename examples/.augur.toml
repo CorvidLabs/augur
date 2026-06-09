@@ -1,0 +1,45 @@
+# .augur.toml — per-repository configuration for augur.
+#
+# Every section is optional. An absent or empty file is equivalent to augur's
+# built-in defaults, so configuration is strictly additive. Drop this file at
+# your repository root and augur discovers it automatically (override with
+# `--config <path>`, or ignore it with `--no-config`).
+
+# Risk-score cutoffs (0...100) that map a score to a verdict:
+#   score >= block  -> block
+#   score >= review -> review   (but below block)
+#   otherwise       -> proceed
+# Defaults are review = 35, block = 65.
+[thresholds]
+review = 35
+block = 65
+
+# Signal weights for the heuristic prior. Only the keys you list are overridden;
+# the rest keep their documented defaults. (Defaults shown.)
+[weights]
+sensitivity = 0.22
+test_gap = 0.20
+churn = 0.15
+coupling = 0.13
+diff_shape = 0.12
+ownership = 0.10
+incident = 0.10
+
+# Set to true to use ONLY the custom [[rules]] below and drop augur's built-in
+# sensitivity ruleset (secrets, auth, crypto, payments, migration, infra, ci,
+# dependencies). Defaults to false: custom rules are MERGED on top of the
+# built-ins.
+[sensitivity]
+replace_defaults = false
+
+# Custom sensitivity rules. Each rule flags paths containing any of `fragments`
+# (case-insensitive substring match) with the given inherent `risk` (0...1).
+[[rules]]
+label = "internal-api"
+risk = 0.7
+fragments = ["internal/", "private/"]
+
+[[rules]]
+label = "feature-flags"
+risk = 0.6
+fragments = ["featureflag", "feature_flag", "flags/"]

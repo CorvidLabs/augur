@@ -12,7 +12,9 @@ let package = Package(
         .library(name: "AugurKit", targets: ["AugurKit"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        // TOML parsing for `.augur.toml`. CLI-only: AugurKit stays dependency-free.
+        .package(url: "https://github.com/dduan/TOMLDecoder", from: "0.3.0"),
     ],
     targets: [
         .target(
@@ -26,6 +28,7 @@ let package = Package(
             dependencies: [
                 "AugurKit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "TOMLDecoder", package: "TOMLDecoder"),
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
