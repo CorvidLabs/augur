@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 4
+version: 5
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -95,11 +95,11 @@ The scoring has two layers:
 | `CoverageReport` | Parsed line coverage keyed by file; `query(path:changedLines:)` and `matchFile(diffPath:)`. |
 | `CoverageReport.FileCoverage` | Per-file instrumented and covered line-number sets. |
 | `CoverageQuery` | Result of a query: `covered`, `instrumented`, `fileMatched`, and `coveredFraction` (`nil` when nothing instrumented). |
-| `CoverageParser.load(path:)` | Loads and parses an LCOV (`.info`) or Cobertura (`.xml`) file from disk. |
+| `CoverageParser.load(path:)` | Loads and parses an LCOV (`.info`), Cobertura/JaCoCo (`.xml`), or Go coverprofile (`.out`) file from disk. |
 | `CoverageParser.parse(contents:path:)` | Parses report text, auto-detecting the format. |
-| `CoverageParser.parseLCOV(_:)` / `parseCobertura(_:)` | Format-specific parsers (Foundation-only; Cobertura via `XMLParser`). |
-| `CoverageParser.detectFormat(path:contents:)` | Detects `.lcov` / `.cobertura` by extension then content sniffing. |
-| `CoverageParser.Format` / `CoverageParser.ParseError` | The format enum and parse-failure errors. |
+| `CoverageParser.parseLCOV(_:)` / `parseCobertura(_:)` / `parseJaCoCo(_:)` / `parseGoProfile(_:)` | Format-specific parsers (Foundation-only; Cobertura and JaCoCo via `XMLParser`, LCOV and Go coverprofile by line parsing). |
+| `CoverageParser.detectFormat(path:contents:)` | Detects `.lcov` / `.cobertura` / `.jacoco` / `.go` by extension then content sniffing. |
+| `CoverageParser.Format` (`lcov`, `cobertura`, `jacoco`, `go`) / `CoverageParser.ParseError` | The format enum and parse-failure errors. |
 
 ### Types & Enums
 
@@ -149,6 +149,9 @@ The scoring has two layers:
 - A code file whose changed lines (e.g. `10,11,12`) are all covered scores `test-gap` risk `0` ("3/3 changed lines covered (100%)"); the same file with those lines uncovered scores risk `1` ("0/3 ..."), and its overall `riskScore` is strictly higher than the covered case.
 - A changed code file absent from the supplied coverage report scores `test-gap` risk `0.7` ("not in coverage report").
 - Parsing LCOV `SF:`/`DA:` records and Cobertura `<class filename><lines><line number hits>` yields, per file, the instrumented and covered line-number sets; `query(path:changedLines:)` restricts counts to instrumented changed lines.
+- Parsing JaCoCo `<report><package name><sourcefile name><line nr mi ci>` yields, per file, instrumented lines (those with a `line` element) and covered lines (`ci > 0`); the reported path is `package@name` + `/` + `sourcefile@name` (e.g. `com/foo` + `Bar.kt` → `com/foo/Bar.kt`, an empty package gives the bare sourcefile name), reconciled with diff paths by the existing suffix matching.
+- Parsing a Go coverprofile (`mode:` header then `path:startLine.col,endLine.col numStmts count` blocks) instruments every line in `startLine...endLine` and covers a line when *any* block over it has `count > 0`; accumulated per file path.
+- `detectFormat` recognizes JaCoCo XML (a `<report>`+`<sourcefile>` pairing or a `jacoco` marker, even with an `.xml` extension) and a Go coverprofile (first non-empty line begins `mode:`, or an `.out` extension), while LCOV (`.info`) and Cobertura (`.xml`/`<coverage`) detection is unchanged.
 - A coverage path `/build/checkout/Sources/App/Service.swift` matches the diff path `Sources/App/Service.swift` by longest suffix; a path sharing no trailing component does not match.
 - An assessment with a `block`, a `review`, and a `proceed` file projects to a `SarifReport` with `version == "2.1.0"`, three results whose `level`s are `error`, `warning`, and `note` respectively, each citing rule `augur/change-risk`; a file with added lines `[42, 7, 99]` gets `region.startLine == 7`, a file with no added lines gets no region, and the SARIF JSON decodes back to an equal report.
 
@@ -167,6 +170,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v5: Two more coverage formats ingested by the existing `CoverageParser`, keeping `AugurKit` Foundation-only. **JaCoCo XML** (Kotlin/Java) via `parseJaCoCo(_:)`: a `<line nr ...>` under `<package name><sourcefile name>` is instrumented, covered when `ci` (covered instructions) > 0; the reported path is `package@name` + `/` + `sourcefile@name`, reconciled by the existing suffix matching. **Go coverprofile** (`go test -coverprofile`) via `parseGoProfile(_:)`: a `mode:` header then `path:start.col,end.col numStmts count` blocks; each block instruments lines `start...end` and covers them when `count > 0` (a line is covered if any covering block has `count > 0`). `CoverageParser.Format` gains `jacoco` and `go`; `detectFormat` recognizes JaCoCo (`<report>`+`<sourcefile>` markers / `jacoco`) and Go (`mode:` first line / `.out` extension), with LCOV and Cobertura detection unchanged. `--coverage <path>` now accepts all four formats; auto-detection at the repo root also looks for `jacoco.xml`, `cover.out`, and `coverage.out` (first found wins, logged to stderr). The `CoverageReport` query API and the engine's consumption are unchanged. `AugurKit` remains free of third-party dependencies.
 - v4: SARIF 2.1.0 output (`Sarif.swift`). New Foundation-only `Codable` `SarifReport` model (a minimal valid SARIF 2.1.0 subset) with `init(from:toolVersion:addedLinesByPath:)` projecting an `Assessment` into one `run` carrying one `result` per file under a single `augur/change-risk` reporting descriptor; result `level` is mapped from each file's verdict (`block → error`, `review → warning`, `proceed → note`), `region.startLine` is the file's first added line when known, and `riskScore`/`confidence`/`verdict` go in `result.properties`. `SarifReport.jsonString()`/`jsonData()` mirror the `Assessment` renderers (sorted-key, deterministic). `Augur.addedLines(in:)` is exposed as a probe passthrough so the CLI can place regions. CLI adds `--sarif` and `--sarif-out <path>` to `check` (mutually exclusive with `--json`; `--sarif-out` implies `--sarif`). `AugurKit` remains free of third-party dependencies.
 - v3: Per-line coverage ingestion (`Coverage.swift`). New `CoverageReport` / `CoverageReport.FileCoverage` / `CoverageQuery` types and a Foundation-only `CoverageParser` (LCOV + Cobertura XML via `XMLParser`, with format auto-detection and `load(path:)`). `ChangedFile` gains `addedLines` (default empty, back-compatible). `RepositoryProbe` gains `addedLines(in:)` (default `[:]`); `GitRepository` parses `git diff --unified=0` hunk headers to populate it. Optional `coverage:` parameter threaded through `RiskEngine.assess(...)` and both `Augur.assess(...)` overloads (default `nil`); when supplied, the test-gap signal becomes `1 - covered/instrumented` over a file's instrumented changed lines (absent file → `0.7`), otherwise the original heuristic is unchanged. CLI adds `--coverage <path>` and `--no-coverage` to `check`/`gate`, with auto-detection of `lcov.info` / `coverage.xml` at the repo root. A composite `action.yml` ("augur gate") builds augur from its own checkout and gates on self-hosted macOS. `AugurKit` remains free of third-party dependencies.
 - v2: Configurable verdict thresholds via `Thresholds` (engine + `Verdict.from(riskScore:thresholds:)`), threaded through `RiskEngine.init(weights:rules:thresholds:)` and surfaced on `Assessment.thresholds`. `Weights` is now `Codable`. Added `CalibrationCache` (a `Codable` projection of `HistorySnapshot`) with `HistorySnapshot.init(cache:)` / `makeCache(head:)`, `Augur.calibrate()` / `assess(scope:history:now:)` / `currentHead()`, and `RepositoryProbe.headSHA()`. `topPartner` now breaks ties deterministically by partner path. CLI adds `.augur.toml` config (parsed in the CLI layer only), the `calibrate` command, `check --cached`, and `--config` / `--no-config`. `AugurKit` remains free of third-party dependencies.
