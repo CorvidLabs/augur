@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# augur pre-commit hook — block a commit whose STAGED changes score 'block'.
+#
+# augur assesses the staged diff (git diff --cached) and exits non-zero when the
+# verdict meets or exceeds the threshold, so the commit is refused locally before
+# it ever reaches CI. Lower the threshold to 'review' to also stop on review-grade
+# changes (you'll then commit risky work with `git commit --no-verify` knowingly).
+#
+# Install (from the repo root):
+#   ln -s ../../examples/hooks/pre-commit .git/hooks/pre-commit
+#   # or, to copy instead of symlink:
+#   install -m 0755 examples/hooks/pre-commit .git/hooks/pre-commit
+#
+# Bypass a single commit when you accept the risk:
+#   git commit --no-verify
+set -euo pipefail
+
+THRESHOLD="${AUGUR_THRESHOLD:-block}"
+
+# Find augur: a binary on PATH, else a release/debug build in this repo.
+if command -v augur >/dev/null 2>&1; then
+    AUGUR="$(command -v augur)"
+elif [[ -x ".build/release/augur" ]]; then
+    AUGUR=".build/release/augur"
+elif [[ -x ".build/debug/augur" ]]; then
+    AUGUR=".build/debug/augur"
+else
+    echo "augur pre-commit: augur not found on PATH or in .build/ — skipping." >&2
+    exit 0
+fi
+
+# Nothing staged -> nothing to gate.
+if git diff --cached --quiet; then
+    exit 0
+fi
+
+if ! "$AUGUR" gate --staged --threshold "$THRESHOLD"; then
+    echo >&2
+    echo "augur pre-commit: change blocked (>= $THRESHOLD). Re-run with details:" >&2
+    echo "  augur check --staged -v" >&2
+    echo "Override deliberately with: git commit --no-verify" >&2
+    exit 1
+fi

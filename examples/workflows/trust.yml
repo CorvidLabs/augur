@@ -1,0 +1,99 @@
+# trust.yml — a reusable "trust gate" workflow other CorvidLabs repos can copy.
+#
+# On every pull request it builds augur from a checkout and runs `augur gate`,
+# failing the job when the change's risk verdict meets or exceeds the threshold.
+# The commented-out section shows where attest would slot in to RECORD and
+# VERIFY provenance once both tools are available on the runner.
+#
+# HONEST SCOPE
+#   * macOS-only: it runs on CorvidLabs' self-hosted macOS ARM64 runners.
+#   * It builds augur from a checkout of the augur repo (it does NOT install a
+#     published binary). Cross-repo tool packaging — shipping prebuilt augur /
+#     attest binaries and installing them into a foreign repo without a Swift
+#     toolchain — is a DEFERRED later step. Don't expect `uses: CorvidLabs/...`
+#     to gate a foreign repo yet.
+#
+# To use this in another repo: copy it to .github/workflows/trust.yml and set
+# AUGUR_REPO_REF (and, later, ATTEST_REPO_REF) to a pinned ref.
+
+name: trust
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: augur gate
+    runs-on: [self-hosted, macOS]
+    steps:
+      # The repository being gated. fetch-depth: 0 so the range has history.
+      - name: Checkout (with history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Build augur from a checkout. This is the deferred-packaging caveat made
+      # explicit: there is no published binary yet, so we compile from source.
+      - name: Checkout augur
+        uses: actions/checkout@v4
+        with:
+          repository: CorvidLabs/augur
+          ref: main            # pin to a tag/SHA for reproducible gates
+          path: .augur-src
+
+      - name: Build augur (release)
+        shell: bash
+        working-directory: .augur-src
+        run: swift build -c release
+
+      # Gate the PR range. --threshold block fails only on a 'block' verdict;
+      # tighten to 'review' to force human review of anything risky.
+      # Add --coverage lcov.info (after producing it) to sharpen the test-gap
+      # signal with per-line coverage.
+      - name: augur gate
+        shell: bash
+        run: |
+          .augur-src/.build/release/augur gate \
+            --range "origin/${{ github.base_ref }}..HEAD" \
+            --threshold block
+            # --coverage lcov.info
+
+      # --- attest: record + verify provenance (DEFERRED — uncomment when ready)
+      # Both augur and attest must be available on the runner. As with augur,
+      # attest is built from a checkout below until cross-repo packaging lands.
+      #
+      # - name: Checkout attest
+      #   uses: actions/checkout@v4
+      #   with:
+      #     repository: CorvidLabs/attest
+      #     ref: main
+      #     path: .attest-src
+      #
+      # - name: Build attest (release)
+      #   shell: bash
+      #   working-directory: .attest-src
+      #   run: swift build -c release
+      #
+      # # Record the agent's verdict as provenance (augur -> attest over a pipe).
+      # - name: Record attestation from augur
+      #   shell: bash
+      #   run: |
+      #     .augur-src/.build/release/augur check \
+      #       --range "origin/${{ github.base_ref }}..HEAD" --json \
+      #       | .attest-src/.build/release/attest sign \
+      #           --from-augur - \
+      #           --commit HEAD \
+      #           --reviewer "agent:ci" \
+      #           --tests-passed
+      #
+      # # Gate on the recorded trust. With a policy that requires human approval
+      # # for review+ verdicts, this fails until a human attestation is added —
+      # # forcing escalation instead of an unreviewed merge.
+      # - name: Verify trust policy
+      #   shell: bash
+      #   run: |
+      #     .attest-src/.build/release/attest verify \
+      #       --range "origin/${{ github.base_ref }}..HEAD" \
+      #       --policy .attest.json
