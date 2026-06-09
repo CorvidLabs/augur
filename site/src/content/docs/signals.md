@@ -1,12 +1,12 @@
 ---
 title: "Signals"
-description: "Every augur signal — what it catches, its weight, and how to tune it."
+description: "Every augur signal: what it catches, its weight, and how to tune it."
 section: "Reference"
 order: 2
 ---
 
 Every signal is a pure, deterministic function over the change surface and the
-repository's git history — no model, no network. Each contributes a `risk` in
+repository's git history. No model, no network. Each contributes a `risk` in
 `0...1`, carries a documented `weight`, and emits a human-readable `detail`. The
 per-file score is the weight-normalized blend; see
 [architecture.md](architecture.md) for how the blend and aggregation work.
@@ -20,7 +20,7 @@ overridable per field via `.augur.toml [weights]` (see
 | Signal | Weight | What it catches |
 |--------|-------:|-----------------|
 | [`sensitivity`](#sensitivity) | `0.2024` | Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests. |
-| [`test-gap`](#test-gap) | `0.1656` | Code changed with no test in the changeset — or, with coverage, the uncovered fraction of changed lines. |
+| [`test-gap`](#test-gap) | `0.1656` | Code changed with no test in the changeset, or, with coverage, the uncovered fraction of changed lines. |
 | [`churn`](#churn) | `0.1380` | Hot files that change constantly are fragile. |
 | [`coupling`](#coupling) | `0.1196` | A file's usual co-change partner is *absent* from the change. |
 | [`diff-shape`](#diff-shape) | `0.1104` | Large single-file edits are harder to review. |
@@ -127,7 +127,7 @@ Flags review-routing gaps using the repo's `CODEOWNERS` file. Behavior:
 
 `augur` auto-discovers `CODEOWNERS` at `.github/CODEOWNERS`, `CODEOWNERS`, or
 `docs/CODEOWNERS` (GitHub precedence; first found wins). Matching follows GitHub
-semantics — **last matching pattern wins** — and reuses the same `GlobPattern`
+semantics (**last matching pattern wins**) and reuses the same `GlobPattern`
 engine as path exclusions. Disable with `--no-codeowners`.
 
 ```text

@@ -17,14 +17,14 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  /* Verdict colors — the proceed/review/block traffic light. */
+  /* Verdict colors: the proceed/review/block traffic light. */
   --proceed: #34d399;
   --proceed-muted: rgba(52, 211, 153, 0.10);
   --review: #fbbf24;
   --review-muted: rgba(251, 191, 36, 0.10);
   --block: #f87171;
   --block-muted: rgba(248, 113, 113, 0.10);
-  /* Terminal-mockup cyan — mirrors the CLI's ANSI cyan (paths, confidence). */
+  /* Terminal-mockup cyan: mirrors the CLI's ANSI cyan (paths, confidence). */
   --term-cyan: #5eead4;
   --tap: 44px;
   --max-w: 1180px;

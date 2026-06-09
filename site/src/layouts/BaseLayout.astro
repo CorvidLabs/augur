@@ -7,7 +7,7 @@ interface Props {
   title: string
   description?: string
 }
-const { title, description = "🔮 Graded trust for code changes — deterministic risk scoring (proceed/review/block) for humans and AI agents. No API key, no LLM." } = Astro.props
+const { title, description = "🔮 Graded trust for code changes. Deterministic risk scoring (proceed/review/block) for humans and AI agents. No API key, no LLM." } = Astro.props
 // Canonical: prefer the site origin + the current pathname so crawlers don't
 // treat trailing-slash/no-slash or query-string variants as duplicates.
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).toString()

@@ -1,11 +1,11 @@
-# AGENTS.md — augur
+# AGENTS.md: augur
 
 Guidance for AI agents working in this repository.
 
 ## What augur is
 
-A deterministic change-risk engine. It reads a git diff and emits a verdict — `proceed`,
-`review`, or `block` — from structural signals only. **No API key, no LLM in the core.**
+A deterministic change-risk engine. It reads a git diff and emits a verdict (`proceed`,
+`review`, or `block`) from structural signals only. **No API key, no LLM in the core.**
 
 ## Golden rules
 
@@ -15,7 +15,7 @@ A deterministic change-risk engine. It reads a git diff and emits a verdict — 
    (`.augur.toml` via `TOMLDecoder`) lives in the **CLI target only**: the CLI decodes the
    file, then constructs `RiskEngine(weights:rules:thresholds:)` and injects it into the pure
    engine. Verdict thresholds are configurable via the `Thresholds` type in `AugurKit`.
-3. Scoring must stay **deterministic** — no `Date()`/randomness inside the engine; `now` is
+3. Scoring must stay **deterministic**: no `Date()`/randomness inside the engine; `now` is
    injected at the CLI boundary so tests are reproducible.
 4. Every signal must carry a human-readable `detail`. No opaque numbers.
 5. Follow CorvidLabs Swift conventions: explicit access control, K&R braces, no force
@@ -33,7 +33,7 @@ A deterministic change-risk engine. It reads a git diff and emits a verdict — 
 ## Workflow
 
 ```sh
-fledge run check     # build + test + spec — run before claiming done
+fledge run check     # build + test + spec; run before claiming done
 fledge run test
 fledge run spec
 fledge run selfcheck # run augur on your own changes

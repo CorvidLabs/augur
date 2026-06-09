@@ -9,7 +9,7 @@ import { base } from '../lib/path'
 
 const signals = [
   { name: 'sensitivity', catches: 'Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests.' },
-  { name: 'test-gap', catches: 'Code changed with no test in the changeset — or, with coverage, the uncovered fraction of changed lines.' },
+  { name: 'test-gap', catches: 'Code changed with no test in the changeset, or, with coverage, the uncovered fraction of changed lines.' },
   { name: 'churn', catches: 'Hot files that change constantly are fragile.' },
   { name: 'coupling', catches: "A file's usual co-change partner is absent from the change." },
   { name: 'diff-shape', catches: 'Large single-file edits are harder to review.' },
@@ -18,7 +18,7 @@ const signals = [
   { name: 'codeowners', catches: "A changed file with no declared owner in the repo's CODEOWNERS." },
 ]
 ---
-<BaseLayout title="augur — graded trust for code changes">
+<BaseLayout title="augur: graded trust for code changes">
 <main id="main">
 
 <section class="hero" aria-labelledby="hero-h">
@@ -27,7 +27,7 @@ const signals = [
       <div>
         <Badge dot>🔮 v0.1.0 · no API key · no LLM</Badge>
         <h1 class="hero-h1" id="hero-h">Graded trust<br>for <span class="oracle">code changes.</span></h1>
-        <p class="hero-sub">`augur` reads a diff and tells you how risky it is — and whether a human should look — as a deterministic, scriptable verdict: proceed, review, or block.</p>
+        <p class="hero-sub">`augur` reads a diff and tells you how risky it is, and whether a human should look, as a deterministic, scriptable verdict: proceed, review, or block.</p>
         <div class="verdict-row" aria-label="The three verdicts">
           <Verdict kind="proceed" />
           <Verdict kind="review" />
@@ -38,7 +38,7 @@ const signals = [
           <Button href={`${base}docs/signals`} variant="secondary">See the signals</Button>
         </div>
         <p class="hero-fineprint">Build it: <code>swift build -c release</code> · macOS · Swift 6 · git</p>
-        <p class="hero-fineprint">Colored, TTY-aware output — <code>--color auto|always|never</code>, honors <code>NO_COLOR</code>; piped &amp; JSON stay plain.</p>
+        <p class="hero-fineprint">Colored, TTY-aware output: <code>--color auto|always|never</code>, honors <code>NO_COLOR</code>; piped &amp; JSON stay plain.</p>
       </div>
       <div>
         <Terminal title="augur check" ariaLabel="augur check terminal example, colored output">
@@ -78,11 +78,11 @@ const signals = [
     <header class="section-head">
       <p class="section-eyebrow">Why it exists</p>
       <h2 id="why-h">Agents made code cheap.<br>The scarce resource is now <em>trust.</em></h2>
-      <p>`augur` turns the senior-engineer instinct — "this part is fine, that part needs a careful look" — into a deterministic artifact both humans and agents can act on.</p>
+      <p>`augur` turns the senior-engineer instinct ("this part is fine, that part needs a careful look") into a deterministic artifact both humans and agents can act on.</p>
     </header>
 
     <Callout type="caveat">
-      <p><strong>The missing primitive.</strong> Humans can't hand-review the volume agents produce, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is that primitive — language-agnostic, CI-agnostic, requiring no API key and no LLM.</p>
+      <p><strong>The missing primitive.</strong> Humans can't hand-review the volume agents produce, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is that primitive: language-agnostic, CI-agnostic, requiring no API key and no LLM.</p>
     </Callout>
 
     <ul class="why-grid">
@@ -99,7 +99,7 @@ const signals = [
       <li class="why-card">
         <div class="why-icon" aria-hidden="true">🔬</div>
         <h3>Deterministic & grounded</h3>
-        <p>Every signal is derived from git history and the filesystem — no model, no network. A history calibration reports whether a score is guessing or grounded.</p>
+        <p>Every signal is derived from git history and the filesystem. No model, no network. A history calibration reports whether a score is guessing or grounded.</p>
       </li>
     </ul>
   </div>
@@ -128,7 +128,7 @@ const signals = [
     <header class="section-head">
       <p class="section-eyebrow">Trust pipeline</p>
       <h2 id="trust-h">augur scores the risk.<br><em>attest</em> records the trust.</h2>
-      <p>A verdict from `augur` is ephemeral — it lives for one CI run and is gone. Its sibling <a href="https://github.com/CorvidLabs/attest">attest</a> makes it durable: a signed-or-unsigned provenance note, keyed to the commit SHA, of who or what reviewed a change and at what confidence. They compose over a pipe and never link to each other.</p>
+      <p>A verdict from `augur` is ephemeral: it lives for one CI run and is gone. Its sibling <a href="https://github.com/CorvidLabs/attest">attest</a> makes it durable: a signed-or-unsigned provenance note, keyed to the commit SHA, of who or what reviewed a change and at what confidence. They compose over a pipe and never link to each other.</p>
     </header>
     <div class="trust-code">
       <pre><code>augur check --json | attest sign --from-augur -   <span class="cc">{'# record the trust'}</span>

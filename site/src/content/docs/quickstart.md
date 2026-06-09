@@ -6,7 +6,7 @@ order: 1
 ---
 
 Get `augur` running on your project in under a minute. `augur` needs no API key,
-no LLM, and no configuration to start — just Swift 6 and `git` on `PATH`. It is
+no LLM, and no configuration to start, just Swift 6 and `git` on `PATH`. It is
 macOS-only.
 
 ---
@@ -69,11 +69,11 @@ On a real terminal this is **colored**: the verdict is tinted by level
 gauge tinted by the same scale, file paths are
 <span style="color:var(--term-cyan)">cyan</span>, and secondary detail is dimmed.
 Color is **TTY-aware**: `augur` emits plain text (exactly as shown above) whenever
-stdout is not a terminal — so piped, redirected, `--json`, and `--sarif` output
+stdout is not a terminal, so piped, redirected, `--json`, and `--sarif` output
 stays clean and scriptable. Control it with `--color auto|always|never` (default
 `auto`), and `augur` honors the [`NO_COLOR`](https://no-color.org) convention.
 
-`check` always exits `0` — it reports, it does not gate.
+`check` always exits `0`: it reports, it does not gate.
 
 ---
 
@@ -104,7 +104,7 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
 
 ## 4. Sharpen it (optional)
 
-Everything past here is additive — `augur` works without any of it.
+Everything past here is additive; `augur` works without any of it.
 
 | Want | Do this | Guide |
 |------|---------|-------|
@@ -118,6 +118,6 @@ Everything past here is additive — `augur` works without any of it.
 
 ## What's next?
 
-- [CLI reference](cli.md) — every command, flag, exit code, and the JSON shape.
-- [Signals](signals.md) — what each of the eight signals catches and how to tune it.
-- [Architecture](architecture.md) — how the deterministic, zero-dependency engine works.
+- [CLI reference](cli.md): every command, flag, exit code, and the JSON shape.
+- [Signals](signals.md): what each of the eight signals catches and how to tune it.
+- [Architecture](architecture.md): how the deterministic, zero-dependency engine works.

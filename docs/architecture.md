@@ -1,14 +1,14 @@
 # Architecture
 
 `augur` is a deterministic change-risk engine: it reads a git diff and emits a
-verdict — `proceed`, `review`, or `block` — from structural signals only. No API
+verdict (`proceed`, `review`, or `block`) from structural signals only. No API
 key, no LLM in the core.
 
 ## Two targets
 
 | Target | Role | Dependencies |
 |--------|------|--------------|
-| **`AugurKit`** (library) | The pure engine: probes, signals, scoring, calibration, coverage parsing, glob/CODEOWNERS matching, SARIF projection. | **Foundation only** — zero third-party deps. |
+| **`AugurKit`** (library) | The pure engine: probes, signals, scoring, calibration, coverage parsing, glob/CODEOWNERS matching, SARIF projection. | **Foundation only**, zero third-party deps. |
 | **`augur`** (CLI) | Argument parsing, config loading, file discovery, output formatting, optional AI delegation. | `swift-argument-parser`, `TOMLDecoder` (CLI layer only). |
 
 The split is deliberate and enforced:
@@ -88,7 +88,7 @@ embeddable, fast to build, and free of supply-chain surface in the part that
 decides whether your change is safe. Concretely:
 
 - **Coverage parsing** (LCOV / Cobertura / JaCoCo / Go) uses `XMLParser` and line
-  parsing — see [coverage.md](coverage.md).
+  parsing. See [coverage.md](coverage.md).
 - **Glob matching** (`GlobPattern`) lowers globs to `NSRegularExpression`.
 - **CODEOWNERS** (`CodeOwners`) reuses `GlobPattern` for path matching.
 - **SARIF** output is a Foundation `Codable` model.
