@@ -134,11 +134,11 @@ jobs:
           EXISTING=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
             | python3 -c "import sys,json; cs=json.load(sys.stdin); print(next((c['id'] for c in cs if '<!-- augur-report -->' in c.get('body','')), ''))" 2>/dev/null)
           if [ -n "$EXISTING" ]; then
-            gh api -X PATCH "repos/${REPO}/issues/comments/${EXISTING}" -f body=@augur-report.md \
+            gh api -X PATCH "repos/${REPO}/issues/comments/${EXISTING}" -F body=@augur-report.md \
               && echo "Updated sticky augur comment ${EXISTING}" \
               || echo "comment skipped"
           else
-            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body=@augur-report.md \
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -F body=@augur-report.md \
               && echo "Posted sticky augur comment" \
               || echo "comment skipped"
           fi
