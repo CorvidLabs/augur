@@ -32,12 +32,18 @@ public struct ChangedFile: Sendable, Equatable, Codable {
     public let linesAdded: Int
     public let linesDeleted: Int
     public let isBinary: Bool
+    /// The 1-based line numbers ADDED to the file's new revision, used for
+    /// per-line coverage scoring. Empty when unknown (e.g. fixture-constructed
+    /// files or a numstat-only probe), in which case coverage scoring falls back
+    /// to the heuristic test-gap behavior.
+    public let addedLines: [Int]
 
-    public init(path: String, linesAdded: Int, linesDeleted: Int, isBinary: Bool) {
+    public init(path: String, linesAdded: Int, linesDeleted: Int, isBinary: Bool, addedLines: [Int] = []) {
         self.path = path
         self.linesAdded = linesAdded
         self.linesDeleted = linesDeleted
         self.isBinary = isBinary
+        self.addedLines = addedLines
     }
 
     /// Total lines touched (additions + deletions).

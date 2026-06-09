@@ -21,8 +21,16 @@
 - [x] Tests for custom thresholds, merged rules, default-threshold equivalence, and cache round-trip.
 - [x] Examples (`examples/*.sh`) and self-hosted macOS CI (`.github/workflows/ci.yml`).
 
+## Done (v3)
+
+- [x] Per-line coverage ingestion (lcov/cobertura) to sharpen the test-gap signal per line.
+- [x] `CoverageReport` / `CoverageParser` (Foundation-only) + `ChangedFile.addedLines` from `git diff --unified=0`.
+- [x] `--coverage <path>` / `--no-coverage` on `check`/`gate`, with auto-detection of `lcov.info` / `coverage.xml`.
+- [x] Composite `action.yml` ("augur gate") for self-hosted macOS; meaningful dogfood step in CI.
+- [x] Tests: LCOV + Cobertura parsing, suffix path-matching, unified=0 parsing, and covered-vs-uncovered scoring.
+
 ## Next
 
 - [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).
 - [ ] Linux/Windows CI matrix and static binaries.
-- [ ] Coverage-report ingestion (lcov/cobertura) to sharpen the test-gap signal per line.
+- [ ] Cross-repo packaging of the `augur gate` action (install a published binary instead of building from the action's own checkout).

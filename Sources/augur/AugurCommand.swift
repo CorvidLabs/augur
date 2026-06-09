@@ -38,6 +38,39 @@ struct ConfigOptions: ParsableArguments {
     }
 }
 
+struct CoverageOptions: ParsableArguments {
+    @Option(name: .long, help: "Path to a coverage report (LCOV .info or Cobertura .xml) to sharpen the test-gap signal per line.")
+    var coverage: String?
+
+    @Flag(name: .long, help: "Disable coverage auto-detection of lcov.info / coverage.xml at the repo root.")
+    var noCoverage = false
+
+    /// Standard report filenames auto-detected at the repository root.
+    static let autoDetectNames = ["lcov.info", "coverage.xml"]
+
+    /// Resolves a coverage report from `--coverage`, else by auto-detecting a
+    /// standard filename at the repo root (unless `--no-coverage`). Prints a
+    /// one-line note to stderr when a report is loaded. Returns `nil` when none
+    /// applies, leaving the heuristic test-gap behavior unchanged.
+    func resolved(repoPath: String) throws -> CoverageReport? {
+        if let coverage {
+            let report = try CoverageParser.load(path: coverage)
+            Diagnostics.note("coverage: loaded \(coverage)")
+            return report
+        }
+        guard !noCoverage else { return nil }
+        let fileManager = FileManager.default
+        for name in Self.autoDetectNames {
+            let candidate = (repoPath as NSString).appendingPathComponent(name)
+            guard fileManager.fileExists(atPath: candidate) else { continue }
+            let report = try CoverageParser.load(path: candidate)
+            Diagnostics.note("coverage: auto-detected \(candidate)")
+            return report
+        }
+        return nil
+    }
+}
+
 struct ScopeOptions: ParsableArguments {
     @Option(name: .long, help: "A git range to assess, e.g. 'main..HEAD'.")
     var range: String?
@@ -69,6 +102,7 @@ struct Check: AsyncParsableCommand {
 
     @OptionGroup var scope: ScopeOptions
     @OptionGroup var configOptions: ConfigOptions
+    @OptionGroup var coverageOptions: CoverageOptions
 
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
@@ -81,8 +115,9 @@ struct Check: AsyncParsableCommand {
 
     func run() async throws {
         let (augur, diffScope) = try scope.makeAugur(config: configOptions)
+        let coverage = try coverageOptions.resolved(repoPath: scope.path)
         do {
-            let assessment = try assess(augur, scope: diffScope)
+            let assessment = try assess(augur, scope: diffScope, coverage: coverage)
             if json {
                 print(try assessment.jsonString())
             } else {
@@ -94,16 +129,16 @@ struct Check: AsyncParsableCommand {
         }
     }
 
-    private func assess(_ augur: Augur, scope diffScope: DiffScope) throws -> Assessment {
-        guard cached else { return try augur.assess(scope: diffScope) }
+    private func assess(_ augur: Augur, scope diffScope: DiffScope, coverage: CoverageReport?) throws -> Assessment {
+        guard cached else { return try augur.assess(scope: diffScope, coverage: coverage) }
         guard let cache = CacheStore.load(repoPath: scope.path) else {
             Diagnostics.note("no cache found at \(CacheStore.path(repoPath: scope.path)); computing live. Run `augur calibrate` first.")
-            return try augur.assess(scope: diffScope)
+            return try augur.assess(scope: diffScope, coverage: coverage)
         }
         if let head = try? augur.currentHead(), !head.isEmpty, !cache.head.isEmpty, head != cache.head {
             Diagnostics.note("cache is stale (calibrated at \(cache.head.prefix(8)), HEAD is \(head.prefix(8))); results may be outdated.")
         }
-        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache))
+        return try augur.assess(scope: diffScope, history: HistorySnapshot(cache: cache), coverage: coverage)
     }
 }
 
@@ -116,6 +151,7 @@ struct Gate: AsyncParsableCommand {
 
     @OptionGroup var scope: ScopeOptions
     @OptionGroup var configOptions: ConfigOptions
+    @OptionGroup var coverageOptions: CoverageOptions
 
     @Option(name: .long, help: "Threshold verdict: proceed, review, or block.")
     var threshold: String = "review"
@@ -128,9 +164,10 @@ struct Gate: AsyncParsableCommand {
             throw ValidationError("threshold must be one of: proceed, review, block")
         }
         let (augur, diffScope) = try scope.makeAugur(config: configOptions)
+        let coverage = try coverageOptions.resolved(repoPath: scope.path)
         let assessment: Assessment
         do {
-            assessment = try augur.assess(scope: diffScope)
+            assessment = try augur.assess(scope: diffScope, coverage: coverage)
         } catch AugurError.noChanges {
             return  // nothing to gate
         }
