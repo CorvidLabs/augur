@@ -28,6 +28,7 @@ augur check --range main..HEAD       # a range
 augur check --staged                 # staged changes
 augur check -v                       # show every contributing signal
 augur check --json                   # machine-readable, sorted-key JSON
+augur check --markdown               # GitHub-flavored markdown (PR comments / job summaries)
 augur check --sarif                  # SARIF 2.1.0 for GitHub code scanning
 augur check --sarif-out augur.sarif  # write SARIF to a file (implies --sarif)
 augur check --cached                 # reuse .augur/cache.json (run `calibrate` first)
@@ -38,7 +39,8 @@ augur check --exclude 'vendor/**'    # drop paths from the assessment (repeatabl
 | Flag | Effect |
 |------|--------|
 | `-v, --verbose` | Show every contributing signal per file (not just the top one). |
-| `--json` | Emit stable, sorted-key JSON. Mutually exclusive with `--sarif`. |
+| `--json` | Emit stable, sorted-key JSON. Mutually exclusive with `--markdown` and `--sarif`. |
+| `--markdown` | Emit a GitHub-flavored markdown report (verdict heading, confidence line, riskiest-first per-file table, sticky-comment marker). Mutually exclusive with `--json` and `--sarif`. See [ci-integration.md](ci-integration.md). |
 | `--sarif` | Emit SARIF 2.1.0. See [ci-integration.md](ci-integration.md). |
 | `--sarif-out <path>` | Write SARIF to a file (implies `--sarif`). |
 | `--cached` | Reuse the calibration cache instead of re-walking `git log`. |

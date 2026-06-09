@@ -16,48 +16,58 @@ jobs:
       # `statuses: write` lets the dogfood step post augur's verdict as a commit
       # status, so the result shows as a check on the commit and PR pages.
       statuses: write
+      # `pull-requests: write` lets the PR-report step post/update a sticky
+      # comment carrying the per-file risk table.
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - run: swift build
       - run: swift test
       - run: fledge spec check
-      - name: Dogfood — build the release binary augur ships
+      - name: Dogfood - build the release binary augur ships
         run: swift build -c release
-      - name: Dogfood — augur assesses its own change (verdict in the log)
+      - name: Resolve the assessment range (meaningful on PRs)
+        id: range
         run: |
-          # Resolve a range: prefer the PR base (origin/main..HEAD), fall back to
-          # the last commit, else an empty range on a brand-new repo. This never
-          # errors on a first commit.
-          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          # On a pull_request, the meaningful diff is the WHOLE PR: every commit
+          # from the base branch tip to HEAD. Fetch the base first so the range
+          # resolves, then use origin/<base>..HEAD. On a push to main, the diff is
+          # the just-landed commit (HEAD~1..HEAD). Fall back to an empty range on a
+          # brand-new repo so a first commit never errors.
           RANGE=''
-          if git rev-parse --verify -q origin/main >/dev/null; then
-            RANGE='origin/main..HEAD'
-          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
-            RANGE='HEAD~1..HEAD'
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=200 || true
+            if git rev-parse --verify -q "origin/${{ github.base_ref }}" >/dev/null; then
+              RANGE="origin/${{ github.base_ref }}..HEAD"
+            fi
           fi
-          echo "augur self-assessment range: '${RANGE:-<empty / first commit>}'"
+          if [ -z "$RANGE" ]; then
+            git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+            if git rev-parse --verify -q HEAD~1 >/dev/null; then
+              RANGE='HEAD~1..HEAD'
+            fi
+          fi
+          echo "augur assessment range: '${RANGE:-<empty / first commit>}'"
+          echo "range=$RANGE" >> "$GITHUB_OUTPUT"
+      - name: Dogfood - augur assesses its own change (verdict in the log)
+        run: |
+          RANGE='${{ steps.range.outputs.range }}'
           # Print the full human verdict to the CI log (never fatal here).
           if [ -n "$RANGE" ]; then
             .build/release/augur check --range "$RANGE" || true
           else
-            echo "No prior commit to diff against — skipping self-check."
+            echo "No prior commit to diff against - skipping self-check."
           fi
-      - name: Dogfood — augur gates itself (fatal only on a block-level verdict)
+      - name: Dogfood - augur gates itself (fatal only on a block-level verdict)
         run: |
-          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
-          RANGE=''
-          if git rev-parse --verify -q origin/main >/dev/null; then
-            RANGE='origin/main..HEAD'
-          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
-            RANGE='HEAD~1..HEAD'
-          fi
+          RANGE='${{ steps.range.outputs.range }}'
           # `gate --threshold block` exits non-zero ONLY on a block verdict, so a
           # genuinely dangerous self-change fails CI while proceed/review pass.
           # An empty range (first commit) short-circuits to success.
           if [ -n "$RANGE" ]; then
             .build/release/augur gate --range "$RANGE" --threshold block
           else
-            echo "No range to gate — passing."
+            echo "No range to gate - passing."
           fi
       - name: Dogfood - post augur's verdict as a GitHub commit status
         env:
@@ -67,15 +77,11 @@ jobs:
           # the head SHA so it appears as the `augur` check on the commit and PR.
           # Best-effort by design: a token/permission hiccup must never redden CI,
           # but the default GITHUB_TOKEN with `statuses: write` is enough to work.
+          # The range is the shared PR-aware range, so on a PR the risk number
+          # reflects the whole PR diff (origin/<base>..HEAD), not just one commit.
           set +e
           SHA='${{ github.event.pull_request.head.sha || github.sha }}'
-          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
-          RANGE=''
-          if git rev-parse --verify -q origin/main >/dev/null; then
-            RANGE='origin/main..HEAD'
-          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
-            RANGE='HEAD~1..HEAD'
-          fi
+          RANGE='${{ steps.range.outputs.range }}'
           if [ -z "$RANGE" ]; then
             echo "No range (empty / first commit), skipping commit status."
             exit 0
@@ -102,3 +108,37 @@ jobs:
             -f target_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             && echo "Posted augur commit status: $STATE ($DESC)" \
             || echo "status post skipped"
+      - name: Dogfood - PR job summary + sticky comment with the risk table
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Render augur's markdown report for the whole PR diff, drop it onto the
+          # Actions run summary page, and post/update a sticky PR comment so the
+          # per-file risk table is visible without opening the run. Best-effort:
+          # a permissions hiccup must never redden CI.
+          set +e
+          RANGE='${{ steps.range.outputs.range }}'
+          if [ -z "$RANGE" ]; then
+            echo "No PR range, skipping report."
+            exit 0
+          fi
+          .build/release/augur check --range "$RANGE" --markdown > augur-report.md
+          # Show it on the Actions run summary page.
+          cat augur-report.md >> "$GITHUB_STEP_SUMMARY"
+          # Find an existing sticky comment by the hidden marker, then PATCH it in
+          # place if found, else POST a new one. The marker lives on its own line
+          # in the rendered report (<!-- augur-report -->).
+          PR='${{ github.event.pull_request.number }}'
+          REPO='${{ github.repository }}'
+          EXISTING=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            | python3 -c "import sys,json; cs=json.load(sys.stdin); print(next((c['id'] for c in cs if '<!-- augur-report -->' in c.get('body','')), ''))" 2>/dev/null)
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${EXISTING}" -f body=@augur-report.md \
+              && echo "Updated sticky augur comment ${EXISTING}" \
+              || echo "comment skipped"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body=@augur-report.md \
+              && echo "Posted sticky augur comment" \
+              || echo "comment skipped"
+          fi
