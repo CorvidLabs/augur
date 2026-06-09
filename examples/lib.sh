@@ -13,9 +13,9 @@ augur_bin() {
     fi
     local root
     root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    if [[ ! -x "$root/.build/debug/augur" ]]; then
-        ( cd "$root" && swift build >/dev/null )
-    fi
+    # Always build (incremental — a no-op when up to date) so the demo never
+    # runs a stale binary from an earlier checkout.
+    ( cd "$root" && swift build >/dev/null )
     echo "$root/.build/debug/augur"
 }
 
@@ -31,14 +31,9 @@ attest_bin() {
     root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     attest_root="$(cd "$root/../attest" 2>/dev/null && pwd)" || return 1
     [[ -d "$attest_root" ]] || return 1
-    if [[ ! -x "$attest_root/.build/release/attest" && ! -x "$attest_root/.build/debug/attest" ]]; then
-        ( cd "$attest_root" && swift build >/dev/null 2>&1 ) || return 1
-    fi
-    if [[ -x "$attest_root/.build/release/attest" ]]; then
-        echo "$attest_root/.build/release/attest"
-    else
-        echo "$attest_root/.build/debug/attest"
-    fi
+    # Always build (incremental) so the demo can't run a stale attest binary.
+    ( cd "$attest_root" && swift build >/dev/null 2>&1 ) || return 1
+    echo "$attest_root/.build/debug/attest"
 }
 
 # make_scratch_repo <dir>: create a fresh repo with a realistic history,
