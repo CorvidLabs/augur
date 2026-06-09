@@ -12,7 +12,7 @@ struct AugurCommand: AsyncParsableCommand {
         test gaps, sensitive paths, ownership, and the repo's own revert history) and \
         returns a verdict: proceed, review, or block. No API key or LLM required.
         """,
-        version: "0.1.0",
+        version: "0.2.0",
         subcommands: [Check.self, Gate.self, Calibrate.self, Explain.self],
         defaultSubcommand: Check.self
     )
