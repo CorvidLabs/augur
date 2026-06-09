@@ -51,6 +51,65 @@ for augur self-gating its CI. Reusing it from *other* repos (installing a
 published binary rather than rebuilding) is not wired up yet, so don't add
 `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
 
+## Commit status (verdict in the GitHub web UI)
+
+augur's own CI (`.github/workflows/ci.yml`) posts its self-assessment as a
+GitHub **commit status** so the verdict shows up as a check on the commit and PR
+pages, next to the rest of CI. The job grants `statuses: write` and, after the
+gate step, computes the verdict from
+`augur check --range <range> --json` (range `origin/main..HEAD`, falling back to
+`HEAD~1..HEAD`), then posts it:
+
+```sh
+gh api -X POST repos/<owner>/<repo>/statuses/<sha> \
+  -f state=<success|failure> \
+  -f context=augur \
+  -f description="<verdict> · risk <N>/100" \
+  -f target_url="https://github.com/<owner>/<repo>/actions/runs/<run_id>"
+```
+
+State mapping: `proceed`/`review` → `success`, `block` → `failure`, so a
+block-level change shows a red `augur` check. The SHA is the PR head
+(`github.event.pull_request.head.sha`) or `github.sha` on a push. The step is
+best-effort (`|| echo "status post skipped"`) so a token or permission hiccup can
+never redden CI, and an empty/first-commit range is skipped cleanly. It uses the
+default `GITHUB_TOKEN`, which is sufficient given `statuses: write`.
+
+## Live README badge (served from GitHub Pages)
+
+The README's `augur` badge is a shields.io
+[endpoint badge](https://shields.io/endpoint) backed by a JSON file the Pages
+build publishes at the site root:
+
+```
+https://corvidlabs.github.io/augur/badge.json
+```
+
+`.github/workflows/pages.yml` runs the build job on `[self-hosted, macOS]` (so the
+Swift toolchain is available) and, **before** the Astro build, builds the release
+binary, runs `augur check --range HEAD~1..HEAD --json` on the repo, and writes
+`site/public/badge.json` in the shields endpoint schema:
+
+```json
+{ "schemaVersion": 1, "label": "augur", "message": "<verdict>", "color": "<color>" }
+```
+
+Color map: `proceed → brightgreen`, `review → yellow`, `block → red`. An empty
+range (first commit) falls back to `message: "ready", color: "blue"`. Astro copies
+`site/public/*` to the published root, so the file lands at `site/dist/badge.json`
+and serves at the URL above. The deploy job stays on `ubuntu-latest` (it only
+uploads the built artifact and needs no Swift toolchain). The README references
+the endpoint with:
+
+```md
+[![augur](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/augur/badge.json)](https://corvidlabs.github.io/augur/)
+```
+
+> **Private-repo caveat.** As noted in `pages.yml`, serving Pages from a private
+> repo to a public URL needs a paid GitHub plan; until the repo is public (or a
+> plan is enabled) the badge JSON will not publish, and the endpoint badge will
+> show shields.io's "inaccessible" state. Everything is built and ready.
+
 ## SARIF upload (GitHub code scanning)
 
 `augur check --sarif` emits SARIF 2.1.0; `--sarif-out <path>` writes it to a

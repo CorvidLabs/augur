@@ -11,6 +11,11 @@ env:
 jobs:
   build-test:
     runs-on: [self-hosted, macOS]
+    permissions:
+      contents: read
+      # `statuses: write` lets the dogfood step post augur's verdict as a commit
+      # status, so the result shows as a check on the commit and PR pages.
+      statuses: write
     steps:
       - uses: actions/checkout@v4
       - run: swift build
@@ -54,3 +59,46 @@ jobs:
           else
             echo "No range to gate — passing."
           fi
+      - name: Dogfood - post augur's verdict as a GitHub commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Surface augur's verdict in the GitHub web UI: post a commit status on
+          # the head SHA so it appears as the `augur` check on the commit and PR.
+          # Best-effort by design: a token/permission hiccup must never redden CI,
+          # but the default GITHUB_TOKEN with `statuses: write` is enough to work.
+          set +e
+          SHA='${{ github.event.pull_request.head.sha || github.sha }}'
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          RANGE=''
+          if git rev-parse --verify -q origin/main >/dev/null; then
+            RANGE='origin/main..HEAD'
+          elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+            RANGE='HEAD~1..HEAD'
+          fi
+          if [ -z "$RANGE" ]; then
+            echo "No range (empty / first commit), skipping commit status."
+            exit 0
+          fi
+          JSON=$(.build/release/augur check --range "$RANGE" --json)
+          # Parse the verdict and risk score from augur's JSON.
+          VERDICT=$(printf '%s' "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('verdict',''))")
+          RISK=$(printf '%s' "$JSON" | python3 -c "import sys,json; print(round(json.load(sys.stdin).get('riskScore',0)))")
+          if [ -z "$VERDICT" ]; then
+            echo "Empty verdict, skipping commit status."
+            exit 0
+          fi
+          # Map: proceed/review -> success, block -> failure (a block-level change
+          # then shows a red check on the PR).
+          case "$VERDICT" in
+            block) STATE='failure' ;;
+            *)     STATE='success' ;;
+          esac
+          DESC="${VERDICT} · risk ${RISK}/100"
+          gh api -X POST "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state="$STATE" \
+            -f context=augur \
+            -f description="$DESC" \
+            -f target_url="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            && echo "Posted augur commit status: $STATE ($DESC)" \
+            || echo "status post skipped"

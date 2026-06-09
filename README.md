@@ -1,8 +1,18 @@
 # augur
 
-**Graded trust for changes.** `augur` reads a diff and tells you how risky it is, and
-whether a human should look, as a deterministic, scriptable verdict: `proceed`, `review`,
-or `block`.
+**Graded trust for changes.** A deterministic change-risk verdict for every diff: `proceed`,
+`review`, or `block`. No API key, no LLM.
+
+[![augur](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/augur/badge.json)](https://corvidlabs.github.io/augur/)
+[![CI](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Faugur-blue)](https://corvidlabs.github.io/augur/)
+
+```sh
+swift build -c release   # then run: .build/release/augur check --range main..HEAD
+```
+
+`augur` reads a diff and tells you how risky it is, and whether a human should look, as a
+deterministic, scriptable verdict: `proceed`, `review`, or `block`.
 
 It's built for the world where agents write most of the code: humans can't hand-review the
 volume, and agents have no native sense of "I'm out of my depth here, escalate." `augur` is
