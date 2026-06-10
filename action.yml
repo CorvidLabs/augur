@@ -58,8 +58,10 @@ runs:
         repo="${ACTION_REPO:-CorvidLabs/augur}"
 
         # Resolve which release to install. An explicit `version` wins; otherwise
-        # use the ref the action was pinned to when it looks like a release tag
-        # (so `uses: CorvidLabs/augur@v0.3.0` installs exactly v0.3.0); else latest.
+        # use the ref the action was pinned to when it looks like a version tag.
+        # `@v0.3.0` installs exactly v0.3.0; the moving `@v0` tag has no release of
+        # its own, so its download falls through to "latest" below. Anything else
+        # (branch/sha) installs latest.
         ver="${INPUT_VERSION:-}"
         if [ -z "$ver" ]; then
           case "$ACTION_REF" in
