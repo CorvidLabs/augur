@@ -7,6 +7,10 @@
 [![CI](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Faugur-blue)](https://corvidlabs.github.io/augur/)
 
+<p align="center">
+  <img src="site/public/demo.gif" alt="augur check assesses a working-tree change and returns a REVIEW verdict" width="760">
+</p>
+
 `augur` reads a diff and tells you how risky it is, and whether a human should look, as a
 deterministic, scriptable verdict: `proceed`, `review`, or `block`. macOS-only.
 

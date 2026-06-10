@@ -52,22 +52,15 @@ const signals = [
         <p class="hero-fineprint">Colored, TTY-aware output: <code>--color auto|always|never</code>, honors <code>NO_COLOR</code>; piped &amp; JSON stay plain.</p>
       </div>
       <div>
-        <Terminal title="augur check" ariaLabel="augur check terminal example, colored output">
-<div class="term-line"><span class="term-prompt">$</span> augur check --range main..HEAD</div>
-<div class="term-line">&nbsp;</div>
-<div class="term-line"><span class="term-label">augur</span> <span class="term-dim">· main..HEAD</span></div>
-<div class="term-line">&nbsp;</div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-label">verdict</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review-b">[!] REVIEW</span></div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-label">risk</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<span class="meter-fill-review">██████████</span><span class="meter-track">░░░░░░░░░░</span>]&nbsp;&nbsp;50/100</div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-label">confidence</span>&nbsp;&nbsp;<span class="term-conf">50</span>/100</div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-label">calibration</span> <span class="term-conf">history-backed</span><span class="term-dim"> (156 incidents / 500 commits)</span></div>
-<div class="term-line">&nbsp;</div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-label">files (1), riskiest first:</span></div>
-<div class="term-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">!</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="term-review">50</span>&nbsp;&nbsp;<span class="term-path">src/auth/token.swift</span></div>
-<div class="term-line"><span class="term-dim">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· sensitivity: matches sensitive category 'auth'</span></div>
-<div class="term-line">&nbsp;</div>
-<div class="term-line">&nbsp;&nbsp;<span class="term-review">→ an agent should request human review before merging</span><span class="blink"></span></div>
-        </Terminal>
+        <img
+          class="hero-demo"
+          src={`${base}demo.gif`}
+          alt="Running augur check on a working-tree change: it returns a REVIEW verdict at risk 35 of 100 because the edited file matches the sensitive 'secrets' category."
+          width="1200"
+          height="600"
+          loading="eager"
+          decoding="async"
+        />
       </div>
     </div>
   </div>
@@ -184,6 +177,8 @@ attest verify --policy .attest.json               <span class="cc">{'# gate on i
   .hero-fineprint code { background: var(--bg-raised); padding: 4px 8px; border-radius: 4px;
     border: 1px solid var(--border); color: var(--accent-bright);
     font-family: var(--mono); font-size: 0.875rem; }
+  .hero-demo { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border);
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.55); display: block; }
   .stats { padding: 60px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
     margin-top: 40px; background: linear-gradient(180deg, transparent, rgba(139,92,246,0.03), transparent); }
   .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
