@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.3.0] - 2026-06-10
+
+### Other
+
+- Release v0.3.0: bump CLI version (c7067f5)
+- Add: Linux support (build + test on macOS and Linux) (#27) (7f4bb19)
+- Add: animated demo GIF to README and site hero (#26) (cf4fc48)
+- Security: move CI off self-hosted runners to GitHub-hosted (#25) (f95c61e)
+- Fix: read the hero badge version from CHANGELOG so it does not drift (#24) (81ba253)
+- Add: release binary + brew formula automation, lead with brew, decouple Pages from self-hosted (#23) (a770b9b)
+- Fix: rebuild the site on CHANGELOG changes so the version badge stays accurate (#22) (8fe97e9)
+
 ## [v0.2.1] - 2026-06-09
 
 ### Other
