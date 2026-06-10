@@ -152,7 +152,10 @@ runs:
           if command -v swift >/dev/null 2>&1; then
             echo "::warning::No prebuilt augur for $os/$arch; building from source. Add a Swift toolchain to speed this up or use a supported runner."
             swift build -c release --package-path "$ACTION_PATH"
-            bin="$ACTION_PATH/.build/release/augur"
+            # Ask SwiftPM for the bin dir rather than hardcoding .build/release
+            # (mirrors release.yml; --show-bin-path only prints, never rebuilds).
+            bindir="$(swift build -c release --package-path "$ACTION_PATH" --show-bin-path)"
+            bin="$bindir/augur"
           else
             echo "::error::No prebuilt augur binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
             exit 1
