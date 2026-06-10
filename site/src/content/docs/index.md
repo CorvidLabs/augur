@@ -30,7 +30,7 @@ augur check --range main..HEAD      # assess a range (range-first)
 augur gate --threshold review       # exit 1 if verdict >= review (CI / agents)
 ```
 
-Requires Swift 6 and `git` on `PATH`. `augur` is macOS-only.
+Requires Swift 6 and `git` on `PATH`. `augur` runs on macOS and Linux.
 
 ---
 

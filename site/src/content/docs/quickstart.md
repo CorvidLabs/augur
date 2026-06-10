@@ -7,7 +7,7 @@ order: 1
 
 Get `augur` running on your project in under a minute. `augur` needs no API key,
 no LLM, and no configuration to start, just Swift 6 and `git` on `PATH`. It is
-macOS-only.
+Runs on macOS and Linux.
 
 ---
 

@@ -1,4 +1,10 @@
 @preconcurrency import Foundation
+#if canImport(FoundationXML)
+// On Linux/Windows, XMLParser lives in the separate FoundationXML module; on
+// Apple platforms it is part of Foundation. Import it where it exists so the
+// Cobertura/JaCoCo coverage parsers compile cross-platform.
+import FoundationXML
+#endif
 
 // MARK: - Coverage Query
 

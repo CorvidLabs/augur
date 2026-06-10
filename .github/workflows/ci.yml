@@ -9,9 +9,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  build-test:
+  build-test-macos:
     # GitHub-hosted, ephemeral runner. Never use self-hosted runners on a public
     # repo: a pull_request from a fork would run untrusted code on the host.
+    # macOS is the authoritative gate: full build, test, spec, and the dogfood
+    # steps (which post commit statuses / PR comments) run here.
     runs-on: macos-latest
     permissions:
       contents: read
@@ -146,3 +148,23 @@ jobs:
               && echo "Posted sticky augur comment" \
               || echo "comment skipped"
           fi
+
+  build-test-linux:
+    # Linux build + test on a GitHub-hosted Ubuntu runner, inside the official
+    # Swift 6 container (Ubuntu runners have no Swift toolchain preinstalled).
+    # This proves AugurKit and the CLI compile and pass their tests on Linux on
+    # every commit. The macOS job above owns the fledge / dogfood / commit-status
+    # steps; Linux deliberately runs only build + test.
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # The repo is checked out by a different user than the container runs as,
+      # so mark it safe before any git command the tests invoke.
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: swift build
+      - run: swift test
