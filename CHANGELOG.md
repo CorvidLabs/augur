@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.2.1] - 2026-06-09
+
+### Other
+
+- Release v0.2.1: bump CLI version (073b2be)
+- Fix: report excluded paths when the filter excludes every changed file (#21) (3e71ef3)
+
 ## [v0.2.0] - 2026-06-09
 
 ### Other
