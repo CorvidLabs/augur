@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.3.1] - 2026-06-10
+
+### Other
+
+- Release v0.3.1: bump CLI version (36a3d35)
+- Add: Marketplace-ready GitHub Action that gates any repo (#28) (1f77f81)
+- Fix: skip formula auto-bump gracefully when TAP_GITHUB_TOKEN is unset (23121f9)
+
 ## [v0.3.0] - 2026-06-10
 
 ### Other
