@@ -410,14 +410,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }  # gate needs history for the range
-      - uses: CorvidLabs/augur@v1
+      - uses: CorvidLabs/augur@v0.3.0
         with:
           range: origin/main..HEAD
           threshold: block
           coverage: lcov.info       # optional
 ```
 
-Pin to a release tag (`@v0.3.0`) to install that exact version, or a moving major (`@v1`).
+Pin to a release tag (e.g. `@v0.3.0`) to install that exact version.
 
 | Input | Default | Description |
 |-------|---------|-------------|
@@ -571,7 +571,7 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
 - [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
 - [x] Reusable GitHub Action ("augur gate") for any repo: installs a prebuilt binary
-  (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@v1`.
+  (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@v0.3.0`.
 - [x] **`attest`**: signed provenance records keyed to commit SHAs, a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
   `attest` records that trust. See [Trust layer](#trust-layer-augur--attest) above and
