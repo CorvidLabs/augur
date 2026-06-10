@@ -9,11 +9,11 @@ name: Deploy Site
 # (or a paid plan is enabled). Pages must be enabled once in the repo settings
 # (Settings → Pages → Source: GitHub Actions); this workflow does not enable it.
 #
-# Runner choice: the build job runs on [self-hosted, macOS] to standardize with the rest of
-# the repo (CI builds/tests/gates there too) and because it now needs the Swift toolchain:
-# a pre-build step runs augur on the repo to emit the live badge JSON the README points at.
-# The deploy job stays on ubuntu-latest: it only uploads the already-built artifact via
-# actions/deploy-pages and needs no Swift toolchain, so it keeps the macOS runners free.
+# Runner choice: the build job runs on ubuntu-latest (Bun only, no Swift) so site deploys
+# never queue behind the self-hosted macOS runner. The README badge endpoint is served from
+# a static site/public/badge.json instead of a live per-commit augur verdict; tradeoff: the
+# badge no longer reflects the latest verdict, but it is stable and decoupled from Swift.
+# The deploy job also runs on ubuntu-latest and only uploads the already-built artifact.
 
 on:
   push:
@@ -41,43 +41,10 @@ permissions:
 jobs:
   build:
     name: Build Astro Site
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }   # augur needs history for the range
-
-      - name: Build the live augur badge JSON
-        run: |
-          # Run augur on the repo and write a shields.io endpoint JSON to the site
-          # root (site/public/* copies to the published root), so the README badge
-          # at https://corvidlabs.github.io/augur/badge.json reflects the latest
-          # verdict. Empty range (first commit) falls back to a neutral "ready".
-          set +e
-          swift build -c release
-          RANGE=''
-          if git rev-parse --verify -q HEAD~1 >/dev/null; then
-            RANGE='HEAD~1..HEAD'
-          fi
-          VERDICT=''
-          if [ -n "$RANGE" ]; then
-            JSON=$(.build/release/augur check --range "$RANGE" --json)
-            VERDICT=$(printf '%s' "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('verdict',''))")
-          fi
-          case "$VERDICT" in
-            proceed) MESSAGE='proceed'; COLOR='brightgreen' ;;
-            review)  MESSAGE='review';  COLOR='yellow' ;;
-            block)   MESSAGE='block';   COLOR='red' ;;
-            *)       MESSAGE='ready';   COLOR='blue' ;;
-          esac
-          python3 - "$MESSAGE" "$COLOR" <<'PY'
-          import json, sys
-          message, color = sys.argv[1], sys.argv[2]
-          badge = {"schemaVersion": 1, "label": "augur", "message": message, "color": color}
-          with open("site/public/badge.json", "w") as f:
-              json.dump(badge, f)
-              f.write("\n")
-          PY
-          echo "Wrote site/public/badge.json:" && cat site/public/badge.json
+        with: { fetch-depth: 0 }   # Astro Header reads the version from CHANGELOG.md at build time
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

@@ -14,13 +14,27 @@ deterministic, scriptable verdict: `proceed`, `review`, or `block`. macOS-only.
 
 ### Install
 
-Build the release binary and drop it on your `PATH` (needs Swift 6 and `git`):
+The fastest way is Homebrew (macOS):
+
+```sh
+brew install corvidlabs/tap/augur
+```
+
+Prefer to build from source? Drop the release binary on your `PATH` (needs Swift 6 and `git`):
 
 ```sh
 swift build -c release
 install -m 0755 .build/release/augur /usr/local/bin/augur
 # or, with fledge:
 fledge run install
+```
+
+Other options:
+
+```sh
+mint install CorvidLabs/augur
+# or
+swift package experimental-install
 ```
 
 ### Try it instantly (no setup)
