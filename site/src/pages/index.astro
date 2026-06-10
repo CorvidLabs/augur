@@ -6,6 +6,17 @@ import Terminal from '../components/Terminal.astro'
 import Verdict from '../components/Verdict.astro'
 import Callout from '../components/Callout.astro'
 import { base } from '../lib/path'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Read the released version from the CHANGELOG at build time so the hero badge
+// never drifts behind a release (same source as the header).
+const changelog = fs.readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../CHANGELOG.md'),
+  'utf-8',
+)
+const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? '0.0.0'}`
 
 const signals = [
   { name: 'sensitivity', catches: 'Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests.' },
@@ -25,7 +36,7 @@ const signals = [
   <div class="container">
     <div class="hero-grid">
       <div>
-        <Badge dot>🔮 v0.1.0 · no API key · no LLM</Badge>
+        <Badge dot>🔮 {VERSION} · no API key · no LLM</Badge>
         <h1 class="hero-h1" id="hero-h">Graded trust<br>for <span class="oracle">code changes.</span></h1>
         <p class="hero-sub">`augur` reads a diff and tells you how risky it is, and whether a human should look, as a deterministic, scriptable verdict: proceed, review, or block.</p>
         <div class="verdict-row" aria-label="The three verdicts">
