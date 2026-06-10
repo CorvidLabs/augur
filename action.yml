@@ -1,8 +1,6 @@
 name: "augur gate"
-description: >-
-  Gate a change by its deterministic risk verdict: fail when the verdict meets
-  or exceeds a threshold (proceed, review, block). No API key, no LLM. Installs
-  a prebuilt augur binary for the runner; builds from source only as a fallback.
+# GitHub Marketplace caps this description at 125 characters.
+description: "Deterministic change-risk gate for CI: fail when a diff's verdict reaches proceed, review, or block. No API key, no LLM."
 author: "CorvidLabs"
 
 inputs:
