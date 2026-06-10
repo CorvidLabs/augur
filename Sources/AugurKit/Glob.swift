@@ -58,7 +58,7 @@ public struct GlobPattern: Sendable, Equatable {
     /// pathological pattern like `a/****/b` is well defined. Single `*` matches any
     /// run except `/`; every literal run is regex-escaped.
     static func translate(_ glob: String) -> String {
-        var out = "^"
+        var out = "\\A"
         let scalars = Array(glob)
         var index = 0
         while index < scalars.count {
@@ -106,7 +106,7 @@ public struct GlobPattern: Sendable, Equatable {
                 index += 1
             }
         }
-        out += "$"
+        out += "\\z"
         return out
     }
 

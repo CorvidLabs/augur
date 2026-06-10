@@ -26,11 +26,16 @@ public struct Augur: Sendable {
     ///     the test-gap signal per changed line.
     ///   - filter: An optional `PathFilter`; changed files matching any of its
     ///     patterns are dropped before scoring and reported in
-    ///     `Assessment.excludedPaths`. `nil`/empty excludes nothing.
+    ///     `Assessment.excludedPaths`. `nil`/empty excludes nothing. When the
+    ///     filter excludes every changed file, this returns a normal
+    ///     `Assessment` with empty `files`, the populated `excludedPaths`,
+    ///     verdict `proceed`, and risk 0, rather than throwing `noChanges`.
     ///   - codeOwners: An optional parsed `CODEOWNERS`; when present, changed
     ///     files with no declared owner raise the `codeowners` signal. `nil`
     ///     leaves that signal neutral.
     /// - Returns: The assessment.
+    /// - Throws: `AugurError.noChanges` only when the scope had no changed files
+    ///   at all (before filtering).
     public func assess(
         scope: DiffScope,
         now: Int = Int(Date().timeIntervalSince1970),
@@ -41,7 +46,6 @@ public struct Augur: Sendable {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
         let (kept, excluded) = Self.partition(changed, filter: filter)
-        guard !kept.isEmpty else { throw AugurError.noChanges }
         let history = HistorySnapshot(commits: try probe.recentCommits(limit: historyLimit))
         return engine.assess(
             scope: scope,
@@ -64,10 +68,15 @@ public struct Augur: Sendable {
     ///     value does not affect the verdict; it is reserved for time-based signals.
     ///   - coverage: An optional line-coverage report.
     ///   - filter: An optional `PathFilter`; matching files are dropped before
-    ///     scoring and reported in `Assessment.excludedPaths`.
+    ///     scoring and reported in `Assessment.excludedPaths`. When the filter
+    ///     excludes every changed file, this returns a normal `Assessment` with
+    ///     empty `files`, the populated `excludedPaths`, verdict `proceed`, and
+    ///     risk 0, rather than throwing `noChanges`.
     ///   - codeOwners: An optional parsed `CODEOWNERS` to drive the `codeowners`
     ///     signal; `nil` leaves it neutral.
     /// - Returns: The assessment.
+    /// - Throws: `AugurError.noChanges` only when the scope had no changed files
+    ///   at all (before filtering).
     public func assess(
         scope: DiffScope,
         history: HistorySnapshot,
@@ -79,7 +88,6 @@ public struct Augur: Sendable {
         let changed = try probe.changedFiles(in: scope)
         guard !changed.isEmpty else { throw AugurError.noChanges }
         let (kept, excluded) = Self.partition(changed, filter: filter)
-        guard !kept.isEmpty else { throw AugurError.noChanges }
         return engine.assess(
             scope: scope,
             changedFiles: kept,

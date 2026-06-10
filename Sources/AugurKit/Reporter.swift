@@ -71,12 +71,12 @@ public enum Reporter {
         }
         if !assessment.excludedPaths.isEmpty {
             lines.append("")
-            lines.append(
-                "  " + c.apply(
-                    "excluded: \(assessment.excludedPaths.count) file\(assessment.excludedPaths.count == 1 ? "" : "s")",
-                    Palette.secondary
-                )
-            )
+            let count = assessment.excludedPaths.count
+            let noun = "\(count) file\(count == 1 ? "" : "s")"
+            let text = assessment.files.isEmpty
+                ? "excluded: \(noun), nothing left to assess"
+                : "excluded: \(noun)"
+            lines.append("  " + c.apply(text, Palette.secondary))
         }
         if v != .proceed {
             lines.append("")
