@@ -396,38 +396,45 @@ augur check --cached      # fast path; warns on stderr if stale
 - run: augur gate --range origin/main..HEAD --threshold block
 ```
 
-#### Composite action (`action.yml`)
+#### GitHub Action (`CorvidLabs/augur`)
 
-This repo ships a composite GitHub Action ("augur gate") that builds augur from the
-checked-out source and runs `augur gate`. It targets CorvidLabs' **self-hosted macOS ARM64**
-runners. Use it from augur's *own* workflow to self-gate:
+This repo ships a composite GitHub Action ("augur gate") you can drop into **any** repo. It
+installs a prebuilt `augur` for the runner (macOS universal or Linux x86_64) from the matching
+release, then runs `augur gate` against your checkout — no Swift toolchain required. On other
+platforms it falls back to building augur from its own source (which needs Swift on the runner).
 
 ```yaml
 jobs:
   gate:
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-latest        # or macos-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }   # gate needs history for the range
-      - uses: ./
+        with: { fetch-depth: 0 }  # gate needs history for the range
+      - uses: CorvidLabs/augur@v1
         with:
           range: origin/main..HEAD
           threshold: block
-          coverage: lcov.info        # optional
-          working-directory: .       # optional
+          coverage: lcov.info       # optional
 ```
+
+Pin to a release tag (`@v0.3.0`) to install that exact version, or a moving major (`@v1`).
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `range` | `origin/main..HEAD` | Git range to assess. |
+| `range` | `origin/main..HEAD` | Git range to assess (needs full history). |
 | `threshold` | `block` | Fail at or above this verdict (`proceed` / `review` / `block`). |
 | `coverage` | *(none)* | Optional path to a coverage report (LCOV `.info`, Cobertura/JaCoCo `.xml`, or Go `.out` coverprofile). |
 | `working-directory` | `.` | Repository root to run in. |
+| `version` | *(action ref)* | augur release to install (`v0.3.0` or `latest`); defaults to the pinned tag, else `latest`. |
 
-**Deliberately deferred:** this action builds augur from *its own checkout*, which is correct
-for augur self-gating its CI. Reusing it from *other* repos (installing a published augur
-binary rather than rebuilding the action's checkout) is a later step and is **not** wired up
-yet, so don't add `uses: CorvidLabs/augur@v…` to a foreign repo expecting it to gate that repo.
+| Output | Description |
+|--------|-------------|
+| `verdict` | The computed verdict (`proceed` / `review` / `block`). |
+| `risk` | The computed risk score (0–100). |
+| `binary` | Path to the augur binary used. |
+
+Prebuilt binaries cover **GitHub-hosted macOS and Linux x86_64 runners**. Other runners (e.g.
+`windows-latest`, Linux arm64) need a Swift toolchain so the action can build from source.
 
 ### For agents
 
@@ -563,13 +570,15 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 - [x] `augur calibrate`: cache the history model; report backing volume (`check --cached`).
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
 - [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
-- [x] Composite `action.yml` ("augur gate") for self-hosted macOS self-gating.
+- [x] Reusable GitHub Action ("augur gate") for any repo: installs a prebuilt binary
+  (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@v1`.
 - [x] **`attest`**: signed provenance records keyed to commit SHAs, a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
   `attest` records that trust. See [Trust layer](#trust-layer-augur--attest) above and
   [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
-- Cross-repo tool packaging: ship prebuilt augur / attest binaries so foreign repos can gate
-  without a Swift toolchain (the composite actions and `trust.yml` build from a checkout today).
+- [x] Cross-repo tool packaging: prebuilt augur binaries (macOS universal, Linux x86_64) so
+  foreign repos gate without a Swift toolchain. (`attest` and `trust.yml` still build from a
+  checkout today.)
 
 ## License
 

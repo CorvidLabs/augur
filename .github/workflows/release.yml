@@ -1,12 +1,18 @@
 name: Release
 
-# Builds the universal macOS binary for a tag and uploads it (plus a sha256
-# sidecar) to the GitHub release. The sidecar is what post-release-formula.yml
-# reads to bump the Homebrew formula in CorvidLabs/homebrew-tap, so this must
-# run and succeed before the formula can move.
+# Builds the release binaries for a tag and uploads each (plus a sha256 sidecar)
+# to the GitHub release:
+#   - augur-macos-universal   (arm64 + x86_64)  -> Homebrew formula + the action
+#   - augur-linux-x86_64                          -> the action on Ubuntu runners
+# The macOS sidecar is what post-release-formula.yml reads to bump the Homebrew
+# formula in CorvidLabs/homebrew-tap, so the macOS job must run and succeed
+# before the formula can move. The composite action (action.yml) downloads
+# whichever asset matches the consumer's runner, so both must exist for the
+# Marketplace action to work without a Swift toolchain.
 #
 # GitHub-hosted macos-latest is used on purpose: it ships a Swift toolchain and
-# keeps releases off the queued self-hosted runner.
+# keeps releases off the queued self-hosted runner. Linux builds inside the
+# official swift:6.0 container (Ubuntu runners have no Swift preinstalled).
 
 permissions:
   contents: write
@@ -68,4 +74,75 @@ jobs:
           gh release upload "$TAG" \
             augur-macos-universal \
             augur-macos-universal.sha256 \
+            --clobber
+
+  build-linux:
+    name: Build Linux x86_64 binary
+    runs-on: ubuntu-latest
+    # The bare swift:6.0 image has no `gh`, so this job only BUILDS and hands the
+    # artifacts off; upload-linux (on the host runner, which has gh) publishes them.
+    container: swift:6.0
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build release binary + sha256 sidecar
+        run: |
+          set -euo pipefail
+          swift build -c release
+          cp "$(swift build -c release --show-bin-path)/augur" augur-linux-x86_64
+          file augur-linux-x86_64
+          sha256sum augur-linux-x86_64 | cut -d' ' -f1 > augur-linux-x86_64.sha256
+          cat augur-linux-x86_64.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: augur-linux-x86_64
+          path: |
+            augur-linux-x86_64
+            augur-linux-x86_64.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  upload-linux:
+    name: Publish Linux binary to release
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: augur-linux-x86_64
+
+      - name: Resolve tag
+        id: tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binary + sidecar to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # The macOS job creates the release; wait briefly for it if this job
+          # wins the race, then upload (clobbering for idempotent re-runs).
+          for _ in 1 2 3 4 5 6; do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            echo "Release $TAG not ready yet; retrying..."
+            sleep 10
+          done
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" \
+            augur-linux-x86_64 \
+            augur-linux-x86_64.sha256 \
             --clobber

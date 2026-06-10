@@ -1,16 +1,17 @@
 name: "augur gate"
 description: >-
-  Build augur from this checkout and gate the change: exit non-zero when the
-  risk verdict meets or exceeds a threshold. Deterministic, no API key.
+  Gate a change by its deterministic risk verdict: fail when the verdict meets
+  or exceeds a threshold (proceed, review, block). No API key, no LLM. Installs
+  a prebuilt augur binary for the runner; builds from source only as a fallback.
 author: "CorvidLabs"
 
 inputs:
   range:
-    description: "Git range to assess (e.g. origin/main..HEAD)."
+    description: "Git range to assess (e.g. origin/main..HEAD). Requires full history (checkout with fetch-depth: 0)."
     required: false
     default: "origin/main..HEAD"
   threshold:
-    description: "Verdict at or above which to fail: proceed, review, or block."
+    description: "Verdict at or above which to fail the job: proceed, review, or block."
     required: false
     default: "block"
   coverage:
@@ -18,27 +19,159 @@ inputs:
     required: false
     default: ""
   working-directory:
-    description: "Directory to run augur in (repository root)."
+    description: "Directory to run augur in (the repository to gate). Defaults to the workspace root."
     required: false
     default: "."
+  version:
+    description: >-
+      augur release to install (e.g. v0.3.0), or "latest". Defaults to the ref
+      this action was pinned to when that is a release tag, otherwise "latest".
+    required: false
+    default: ""
+
+outputs:
+  verdict:
+    description: "The computed verdict: proceed, review, or block."
+    value: ${{ steps.assess.outputs.verdict }}
+  risk:
+    description: "The computed risk score (0-100)."
+    value: ${{ steps.assess.outputs.risk }}
+  binary:
+    description: "Absolute path to the augur binary used."
+    value: ${{ steps.install.outputs.binary }}
 
 runs:
   using: "composite"
   steps:
-    - name: Build augur (release)
+    - name: Install augur
+      id: install
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: swift build -c release
-
-    - name: Run augur gate
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+        ACTION_REPO: ${{ github.action_repository }}
       run: |
+        set -euo pipefail
+
+        repo="${ACTION_REPO:-CorvidLabs/augur}"
+
+        # Resolve which release to install. An explicit `version` wins; otherwise
+        # use the ref the action was pinned to when it looks like a release tag
+        # (so `uses: CorvidLabs/augur@v0.3.0` installs exactly v0.3.0); else latest.
+        ver="${INPUT_VERSION:-}"
+        if [ -z "$ver" ]; then
+          case "$ACTION_REF" in
+            v[0-9]*) ver="$ACTION_REF" ;;
+            *)       ver="latest" ;;
+          esac
+        fi
+
+        # Pick the release asset for this runner's OS/arch.
+        os="$(uname -s)"
+        arch="$(uname -m)"
+        case "$os" in
+          Darwin) asset="augur-macos-universal" ;;
+          Linux)
+            case "$arch" in
+              x86_64|amd64) asset="augur-linux-x86_64" ;;
+              *)            asset="" ;;
+            esac
+            ;;
+          *) asset="" ;;
+        esac
+
+        tmp="$(mktemp -d)"
+        bin=""
+
+        download() {
+          # download <tag-or-empty> -> 0 if the binary asset landed in $tmp
+          local tag="$1"
+          rm -f "$tmp/$asset" "$tmp/$asset.sha256"
+          if [ "$tag" = "latest" ] || [ -z "$tag" ]; then
+            gh release download --repo "$repo" \
+              --pattern "$asset" --pattern "$asset.sha256" \
+              --dir "$tmp" --clobber 2>/dev/null || return 1
+          else
+            gh release download "$tag" --repo "$repo" \
+              --pattern "$asset" --pattern "$asset.sha256" \
+              --dir "$tmp" --clobber 2>/dev/null || return 1
+          fi
+          [ -f "$tmp/$asset" ]
+        }
+
+        if [ -n "$asset" ]; then
+          if download "$ver" || { [ "$ver" != "latest" ] && download "latest"; }; then
+            # Verify the checksum sidecar when present; a mismatch is fatal.
+            if [ -f "$tmp/$asset.sha256" ]; then
+              expected="$(cut -d' ' -f1 < "$tmp/$asset.sha256")"
+              if command -v sha256sum >/dev/null 2>&1; then
+                actual="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"
+              else
+                actual="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"
+              fi
+              if [ "$expected" != "$actual" ]; then
+                echo "::error::augur checksum mismatch for $asset (expected $expected, got $actual)."
+                exit 1
+              fi
+              echo "Verified $asset against published sha256."
+            else
+              echo "::warning::No sha256 sidecar published for $asset; skipping checksum verification."
+            fi
+            chmod +x "$tmp/$asset"
+            bin="$tmp/$asset"
+            echo "Installed augur ($asset, $ver) for $os/$arch."
+          fi
+        fi
+
+        # Fallback: build from the action's OWN checkout (never the consumer's
+        # tree) when no prebuilt binary fits this runner. Needs a Swift toolchain.
+        if [ -z "$bin" ]; then
+          if command -v swift >/dev/null 2>&1; then
+            echo "::warning::No prebuilt augur for $os/$arch; building from source. Add a Swift toolchain to speed this up or use a supported runner."
+            swift build -c release --package-path "$ACTION_PATH"
+            bin="$ACTION_PATH/.build/release/augur"
+          else
+            echo "::error::No prebuilt augur binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            exit 1
+          fi
+        fi
+
+        echo "binary=$bin" >> "$GITHUB_OUTPUT"
+
+    - name: Assess (verdict + risk outputs, never fatal)
+      id: assess
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AUGUR: ${{ steps.install.outputs.binary }}
+      run: |
+        # Best-effort: populate the verdict/risk outputs. The gate step below is
+        # what enforces the threshold, so a hiccup here must never fail the job.
+        set +e
+        verdict=""; risk=""
+        json="$("$AUGUR" check --range "${{ inputs.range }}" --json 2>/dev/null)"
+        if [ -n "$json" ] && command -v jq >/dev/null 2>&1; then
+          verdict="$(printf '%s' "$json" | jq -r '.verdict // empty')"
+          risk="$(printf '%s' "$json" | jq -r '(.riskScore // 0) | round')"
+        fi
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+        echo "risk=$risk" >> "$GITHUB_OUTPUT"
+        echo "augur verdict: ${verdict:-unknown} · risk ${risk:-?}/100"
+
+    - name: Gate (fail at or above threshold)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AUGUR: ${{ steps.install.outputs.binary }}
+      run: |
+        set -euo pipefail
         args=(gate --range "${{ inputs.range }}" --threshold "${{ inputs.threshold }}")
         if [ -n "${{ inputs.coverage }}" ]; then
           args+=(--coverage "${{ inputs.coverage }}")
         fi
-        .build/release/augur "${args[@]}"
+        "$AUGUR" "${args[@]}"
 
 branding:
   icon: "eye"
