@@ -59,6 +59,16 @@ public enum MarkdownReporter: Sendable {
             lines.append("")
             lines.append("and \(remaining) more file\(remaining == 1 ? "" : "s").")
         }
+        if !assessment.excludedPaths.isEmpty {
+            let count = assessment.excludedPaths.count
+            let noun = "\(count) file\(count == 1 ? "" : "s")"
+            lines.append("")
+            lines.append(
+                assessment.files.isEmpty
+                    ? "Excluded \(noun), nothing left to assess."
+                    : "Excluded \(noun)."
+            )
+        }
         lines.append("")
         lines.append(marker)
         return lines.joined(separator: "\n")

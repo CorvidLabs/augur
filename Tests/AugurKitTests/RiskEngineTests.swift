@@ -243,7 +243,7 @@ final class RiskEngineTests: XCTestCase {
         XCTAssertEqual(assessment.excludedCount, 2)
     }
 
-    func testExcludingAllFilesYieldsNoChanges() {
+    func testExcludingAllFilesReportsExclusionsNotNoChanges() throws {
         let probe = FixtureProbe(
             changed: [
                 ChangedFile(path: "vendor/a.swift", linesAdded: 10, linesDeleted: 0, isBinary: false),
@@ -251,7 +251,21 @@ final class RiskEngineTests: XCTestCase {
             ],
             commits: manyBenignCommits()
         )
-        let filter = PathFilter(globs: ["vendor/**"])
+        let filter = PathFilter(globs: ["**"])
+        // There were changed files but the filter excluded all of them: this is a
+        // normal proceed assessment that surfaces the exclusions, not a throw.
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: filter)
+
+        XCTAssertTrue(assessment.files.isEmpty)
+        XCTAssertEqual(assessment.verdict, .proceed)
+        XCTAssertEqual(assessment.riskScore, 0)
+        XCTAssertEqual(assessment.excludedPaths, ["vendor/a.swift", "vendor/b.swift"])
+        XCTAssertEqual(assessment.excludedCount, 2)
+    }
+
+    func testGenuinelyEmptyDiffStillThrowsNoChanges() {
+        let probe = FixtureProbe(changed: [], commits: manyBenignCommits())
+        let filter = PathFilter(globs: ["**"])
         XCTAssertThrowsError(try Augur(probe: probe).assess(scope: .workingTree, now: now, filter: filter)) { error in
             guard case AugurError.noChanges = error else {
                 return XCTFail("expected AugurError.noChanges, got \(error)")
