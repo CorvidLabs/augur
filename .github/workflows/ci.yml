@@ -10,7 +10,9 @@ env:
 
 jobs:
   build-test:
-    runs-on: [self-hosted, macOS]
+    # GitHub-hosted, ephemeral runner. Never use self-hosted runners on a public
+    # repo: a pull_request from a fork would run untrusted code on the host.
+    runs-on: macos-latest
     permissions:
       contents: read
       # `statuses: write` lets the dogfood step post augur's verdict as a commit
@@ -21,6 +23,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+      - name: Install fledge
+        run: brew install corvidlabs/tap/fledge
       - run: swift build
       - run: swift test
       - run: fledge spec check
