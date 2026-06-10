@@ -149,24 +149,20 @@ private struct TempGitRepo {
     }
 
     /// Runs a git subcommand in the repo, throwing on a non-zero exit.
+    ///
+    /// Delegates to AugurKit's `ProcessRunner` (posix_spawn + synchronous waitpid)
+    /// rather than `Foundation.Process`, which deadlocks under swift-corelibs on
+    /// Linux when a fast-exiting child's termination is missed.
     @discardableResult
     func run(_ arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", path] + arguments
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
+        let result = try ProcessRunner.run(["git", "-C", path] + arguments)
+        guard result.status == 0 else {
             throw NSError(
                 domain: "TempGitRepo",
-                code: Int(process.terminationStatus),
+                code: Int(result.status),
                 userInfo: [NSLocalizedDescriptionKey: "git \(arguments.joined(separator: " ")) failed"]
             )
         }
-        return String(decoding: data, as: UTF8.self)
+        return result.output
     }
 }

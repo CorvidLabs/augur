@@ -10,7 +10,7 @@ augur <command> [options]
 ```
 
 Commands: [`check`](#check) (default), [`gate`](#gate), [`calibrate`](#calibrate),
-[`explain`](#explain). All commands require `git` on `PATH`. `augur` is macOS-only.
+[`explain`](#explain). All commands require `git` on `PATH`. `augur` runs on macOS and Linux.
 
 ## Scope (shared by `check`, `gate`, `explain`)
 

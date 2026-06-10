@@ -12,13 +12,13 @@
 </p>
 
 `augur` reads a diff and tells you how risky it is, and whether a human should look, as a
-deterministic, scriptable verdict: `proceed`, `review`, or `block`. macOS-only.
+deterministic, scriptable verdict: `proceed`, `review`, or `block`. macOS and Linux.
 
 ## Quickstart
 
 ### Install
 
-The fastest way is Homebrew (macOS):
+The fastest way is Homebrew (macOS); on Linux, build from source (below):
 
 ```sh
 brew install corvidlabs/tap/augur
@@ -525,11 +525,11 @@ ln -s ../../examples/hooks/pre-commit .git/hooks/pre-commit
 git commit --no-verify   # deliberately bypass for one commit
 ```
 
-**Honest scope.** Everything here is **macOS-only** and runs on CorvidLabs' self-hosted
-**macOS ARM64** runners (`runs-on: [self-hosted, macOS]`). Both `trust.yml` and the
-demo build augur (and attest) *from a checkout*. There is no published binary yet, and
-**cross-repo tool packaging** (installing prebuilt augur / attest into a foreign repo
-without a Swift toolchain) is a deliberately deferred later step.
+**Honest scope.** `AugurKit` and the CLI build and run on **macOS and Linux**; CI exercises
+both (full build + test on each, via GitHub-hosted runners). Homebrew ships a prebuilt
+macOS binary; on Linux, build from source with Swift 6. The dogfooding workflows here
+build augur (and attest) *from a checkout*. **Cross-repo tool packaging** (installing a
+prebuilt binary into a foreign repo without a Swift toolchain) remains a deferred step.
 
 ## Documentation
 
