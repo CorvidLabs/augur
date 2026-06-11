@@ -205,3 +205,33 @@ jobs:
             exit 1
           fi
           echo "Action OK — verdict=$VERDICT risk=$RISK/100 binary=$BINARY"
+
+  package-linux:
+    # Exercise release.yml's Linux packaging on every PR so container/shell
+    # regressions (a tool absent from swift:6.0, a dash-vs-bash slip) surface
+    # here instead of at tag time. Mirrors release.yml's `build-linux` script
+    # minus the upload. NOTE: the `gh release`/tag-move steps need a real
+    # release and are NOT exercised here — keep this in sync with release.yml by
+    # hand.
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build and package the Linux binary (no upload)
+        run: |
+          set -euo pipefail
+          swift build -c release
+          cp "$(swift build -c release --show-bin-path)/augur" augur-linux-x86_64
+          file augur-linux-x86_64 || true
+          sha256sum augur-linux-x86_64 | cut -d' ' -f1 > augur-linux-x86_64.sha256
+          cat augur-linux-x86_64.sha256
+          test -x augur-linux-x86_64
+          ./augur-linux-x86_64 --version
