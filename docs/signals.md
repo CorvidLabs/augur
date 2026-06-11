@@ -54,8 +54,9 @@ descending severity:
 ### test-gap
 
 Without coverage, a coarse heuristic: did the changeset touch *any* test file?
-- test file → `0`; binary asset → `0.1`; a sibling test in the changeset → `0.15`;
-  code with no test → `0.7`.
+- test file → `0`; documentation/prose (`.md`, `.rst`, `.txt`, `LICENSE`, ...) → `0`
+  (docs cannot carry tests, so docs-only changes are never penalized); binary
+  asset → `0.1`; a sibling test in the changeset → `0.15`; code with no test → `0.7`.
 
 With a `--coverage` report it becomes precise for non-test code files:
 `risk = 1 − covered/instrumented` over the change's instrumented added lines; a

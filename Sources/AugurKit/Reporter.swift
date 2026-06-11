@@ -46,7 +46,7 @@ public enum Reporter {
             "  " + c.apply("calibration", Palette.header) + " "
                 + c.apply(assessment.calibration.band, Palette.confidence)
                 + c.apply(
-                    " (\(assessment.calibration.incidentCommits) incidents / \(assessment.calibration.totalCommits) commits)",
+                    " (\(counted(assessment.calibration.incidentCommits, "incident")) / \(counted(assessment.calibration.totalCommits, "commit")))",
                     Palette.secondary
                 )
         )
@@ -123,6 +123,11 @@ public enum Reporter {
 
     private static func fmt(_ value: Double) -> String {
         String(Int(value.rounded()))
+    }
+
+    /// `1 incident`, `2 incidents` — count + correctly pluralized noun.
+    private static func counted(_ value: Int, _ noun: String) -> String {
+        "\(value) \(noun)\(value == 1 ? "" : "s")"
     }
 }
 

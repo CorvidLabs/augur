@@ -286,6 +286,63 @@ final class RiskEngineTests: XCTestCase {
         XCTAssertTrue(unfiltered.excludedPaths.isEmpty)
     }
 
+    // MARK: - Documentation test-gap
+
+    /// The test-gap signal must not fire on prose: a docs-only change cannot
+    /// carry a test, so penalizing it keeps docs PRs from ever scoring near 0.
+    func testTestGapDoesNotFireOnDocumentationFiles() throws {
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "README.md", linesAdded: 1, linesDeleted: 0, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now)
+        let file = try XCTUnwrap(assessment.files.first)
+        let testGap = try XCTUnwrap(file.signals.first { $0.name == "test-gap" })
+        XCTAssertEqual(testGap.risk, 0)
+        XCTAssertEqual(testGap.detail, "documentation, not unit-testable")
+    }
+
+    /// A docs file absent from a supplied coverage report must stay neutral
+    /// (instead of scoring 0.7 "not in coverage report").
+    func testDocumentationFileAbsentFromCoverageStaysNeutral() throws {
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "docs/guide.md", linesAdded: 4, linesDeleted: 0, isBinary: false, addedLines: [1, 2, 3, 4])],
+            commits: manyBenignCommits()
+        )
+        let coverage = CoverageReport(files: [
+            CoverageReport.FileCoverage(path: "src/service.swift", instrumented: [1], covered: [1])
+        ])
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now, coverage: coverage)
+        let file = try XCTUnwrap(assessment.files.first)
+        let testGap = try XCTUnwrap(file.signals.first { $0.name == "test-gap" })
+        XCTAssertEqual(testGap.risk, 0)
+    }
+
+    /// Code files keep the heuristic: the docs carve-out must not widen.
+    func testTestGapStillFiresOnCodeFiles() throws {
+        let probe = FixtureProbe(
+            changed: [ChangedFile(path: "src/service.swift", linesAdded: 10, linesDeleted: 0, isBinary: false)],
+            commits: manyBenignCommits()
+        )
+        let assessment = try Augur(probe: probe).assess(scope: .workingTree, now: now)
+        let file = try XCTUnwrap(assessment.files.first)
+        let testGap = try XCTUnwrap(file.signals.first { $0.name == "test-gap" })
+        XCTAssertEqual(testGap.risk, 0.7)
+    }
+
+    func testDocumentationHeuristics() {
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("README.md"))
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("docs/guide.rst"))
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("notes.TXT"))
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("LICENSE"))
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("CHANGELOG"))
+        XCTAssertTrue(DocumentationHeuristics.isDocumentationFile("man/page.adoc"))
+        XCTAssertFalse(DocumentationHeuristics.isDocumentationFile("src/service.swift"))
+        XCTAssertFalse(DocumentationHeuristics.isDocumentationFile("changelog.swift"), "a code file named like prose stays code")
+        XCTAssertFalse(DocumentationHeuristics.isDocumentationFile("Makefile"))
+        XCTAssertFalse(DocumentationHeuristics.isDocumentationFile("src/markdown_parser.go"))
+    }
+
     // MARK: - Weights
 
     func testWeightsSumToOne() {

@@ -36,7 +36,7 @@ public enum MarkdownReporter: Sendable {
         let calibration = assessment.calibration
         lines.append(
             "Confidence \(confidence)/100 - calibration \(calibration.band) "
-                + "(\(calibration.incidentCommits) incidents / \(calibration.totalCommits) commits)."
+                + "(\(counted(calibration.incidentCommits, "incident")) / \(counted(calibration.totalCommits, "commit")))."
         )
         lines.append("")
 
@@ -106,5 +106,10 @@ public enum MarkdownReporter: Sendable {
     /// Rounds a 0...100 score to a whole-number string.
     private static func fmt(_ value: Double) -> String {
         String(Int(value.rounded()))
+    }
+
+    /// `1 incident`, `2 incidents` — count + correctly pluralized noun.
+    private static func counted(_ value: Int, _ noun: String) -> String {
+        "\(value) \(noun)\(value == 1 ? "" : "s")"
     }
 }

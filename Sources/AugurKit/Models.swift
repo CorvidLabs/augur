@@ -249,15 +249,17 @@ public struct Assessment: Sendable, Equatable, Codable {
 
 public enum AugurError: Error, LocalizedError, Sendable {
     case notARepository(String)
-    case git(command: String, status: Int32)
+    case git(command: String, status: Int32, stderr: String)
     case noChanges
 
     public var errorDescription: String? {
         switch self {
         case .notARepository(let path):
             return "Not a git repository: \(path)"
-        case .git(let command, let status):
-            return "git \(command) failed (exit \(status))"
+        case .git(let command, let status, let stderr):
+            let base = "git \(command) failed (exit \(status))"
+            let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            return detail.isEmpty ? base : "\(base): \(detail)"
         case .noChanges:
             return "No changes found in the requested scope."
         }

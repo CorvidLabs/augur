@@ -115,6 +115,33 @@ final class ReporterTests: XCTestCase {
         XCTAssertTrue(rendered.contains("░"))
     }
 
+    // MARK: - Pluralization
+
+    /// A calibration of exactly one incident reads "1 incident", not "1 incidents".
+    func testSingularCalibrationCountsArePluralizedCorrectly() {
+        let single = Assessment(
+            scope: "working-tree",
+            riskScore: 10,
+            verdict: .proceed,
+            calibration: Calibration(confidence: 0.1, totalCommits: 1, incidentCommits: 1),
+            files: []
+        )
+        let rendered = Reporter.render(single, verbose: false, color: false)
+        XCTAssertTrue(rendered.contains("(1 incident / 1 commit)"), rendered)
+        XCTAssertFalse(rendered.contains("1 incidents"))
+        XCTAssertFalse(rendered.contains("1 commits"))
+    }
+
+    /// Plural counts keep the historical "incidents / commits" wording.
+    func testPluralCalibrationCountsAreUnchanged() {
+        let rendered = Reporter.render(
+            assessment(verdict: .review, riskScore: 50, fileRisk: 50),
+            verbose: false,
+            color: false
+        )
+        XCTAssertTrue(rendered.contains("(12 incidents / 100 commits)"))
+    }
+
     // MARK: - Colorizer
 
     /// A disabled colorizer is an identity no-op.

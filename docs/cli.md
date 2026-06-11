@@ -13,10 +13,13 @@ Commands: [`check`](#check) (default), [`gate`](#gate), [`calibrate`](#calibrate
 
 | Flag | Scope |
 |------|-------|
-| *(none)* | Working tree vs `HEAD` (staged + unstaged). |
+| *(none)* | Working tree vs `HEAD` (staged + unstaged + untracked: a never-`git add`ed file is assessed as fully added). |
 | `--range <a..b>` | An explicit git range, e.g. `main..HEAD`. |
 | `--staged` | Staged changes only (`git diff --cached`); ideal for pre-commit. |
 | `-C, --path <dir>` | Path to the repository (default `.`). |
+
+`--range` and `--staged` are mutually exclusive; passing both is a usage error
+(exit 64).
 
 ## check
 

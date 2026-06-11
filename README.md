@@ -122,7 +122,7 @@ Every signal is derived from `git` history and the filesystem. No model, no netw
 | Signal | What it catches |
 |--------|-----------------|
 | **sensitivity** | Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests. |
-| **test-gap** | Code changed with no test in the changeset, *or*, with a coverage report, the fraction of changed lines left uncovered. |
+| **test-gap** | Code changed with no test in the changeset, *or*, with a coverage report, the fraction of changed lines left uncovered. Never fires on documentation/prose files. |
 | **churn** | Hot files that change constantly are fragile. |
 | **coupling** | A file's usual co-change partner is *absent* from the change. |
 | **diff-shape** | Large single-file edits are harder to review. |

@@ -99,9 +99,16 @@ struct CoverageOptions: ParsableArguments {
         for name in Self.autoDetectNames {
             let candidate = (repoPath as NSString).appendingPathComponent(name)
             guard fileManager.fileExists(atPath: candidate) else { continue }
-            let report = try CoverageParser.load(path: candidate)
-            Diagnostics.note("coverage: auto-detected \(candidate)")
-            return report
+            do {
+                let report = try CoverageParser.load(path: candidate)
+                Diagnostics.note("coverage: auto-detected \(candidate)")
+                return report
+            } catch let error as CoverageParser.ParseError {
+                // An explicit --coverage path is a hard error above; a stray
+                // unusable file at the repo root only loses auto-detection, so
+                // warn loudly and fall back to the heuristic test-gap.
+                Diagnostics.warn("coverage: ignoring auto-detected \(candidate): \(error.localizedDescription)")
+            }
         }
         return nil
     }
@@ -179,6 +186,14 @@ struct ScopeOptions: ParsableArguments {
 
     @Option(name: [.long, .customShort("C")], help: "Path to the repository.")
     var path: String = "."
+
+    func validate() throws {
+        // Silently preferring one scope over the other would assess a different
+        // diff than the caller asked for, so conflicting flags are an error.
+        if range != nil, staged {
+            throw ValidationError("--range and --staged are mutually exclusive; pass exactly one scope.")
+        }
+    }
 
     func resolvedScope() -> DiffScope {
         if let range { return .range(range) }
@@ -347,6 +362,14 @@ struct Gate: AsyncParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.")
     var json = false
 
+    func validate() throws {
+        // Validated at parse time so an invalid value reports gate's own usage
+        // (a ValidationError thrown from run() prints the generic root usage).
+        guard Verdict(rawValue: threshold) != nil else {
+            throw ValidationError("threshold must be one of: proceed, review, block")
+        }
+    }
+
     func run() async throws {
         guard let limit = Verdict(rawValue: threshold) else {
             throw ValidationError("threshold must be one of: proceed, review, block")
@@ -394,9 +417,11 @@ struct Calibrate: AsyncParsableCommand {
             return
         }
         let head = cache.head.isEmpty ? "(unknown)" : String(cache.head.prefix(8))
+        let commitsNoun = cache.totalCommits == 1 ? "commit" : "commits"
+        let incidentsNoun = cache.incidentCommits == 1 ? "incident" : "incidents"
         print("augur calibrate · cached \(CacheStore.path(repoPath: path))")
         print("  HEAD         \(head)")
-        print("  volume       \(cache.totalCommits) commits, \(cache.incidentCommits) incidents")
+        print("  volume       \(cache.totalCommits) \(commitsNoun), \(cache.incidentCommits) \(incidentsNoun)")
         print("  calibration  \(cache.band) (confidence \(String(format: "%.2f", cache.confidence)))")
     }
 }
