@@ -168,3 +168,40 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: swift build
       - run: swift test
+
+  smoke-test-action:
+    # Dogfood the bundled composite action (`uses: ./`) end to end: install →
+    # checksum → assess → gate. The other jobs run augur via `.build/release`
+    # directly, so action.yml's wiring (binary install, sha verification, the
+    # injection-safe env handling, version resolution) is otherwise untested.
+    # macOS is used on purpose: it has a Swift toolchain, so the action's
+    # source-build fallback works even when a prebuilt binary is unavailable —
+    # the smoke test never flakes on release-asset timing.
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the action's range needs history
+      - name: Run the bundled action against this checkout
+        id: augur
+        uses: ./
+        # A genuine block verdict must not fail this WIRING smoke test; the
+        # assertion below checks the action actually ran, not what it decided.
+        continue-on-error: true
+        with:
+          range: HEAD~1..HEAD
+          threshold: block
+      - name: Assert the action installed augur and produced a verdict
+        env:
+          VERDICT: ${{ steps.augur.outputs.verdict }}
+          RISK: ${{ steps.augur.outputs.risk }}
+          BINARY: ${{ steps.augur.outputs.binary }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERDICT" ]; then
+            echo "::error::The action produced no verdict — install/assess wiring is broken."
+            exit 1
+          fi
+          echo "Action OK — verdict=$VERDICT risk=$RISK/100 binary=$BINARY"
