@@ -61,6 +61,20 @@ final class MarkdownReporterTests: XCTestCase {
         XCTAssertTrue(rendered.contains("Confidence 60/100 - calibration weak (12 incidents / 100 commits)."))
     }
 
+    /// A single incident / commit reads grammatically ("1 incident", not "1 incidents").
+    func testConfidenceLineSingularCounts() {
+        let single = Assessment(
+            scope: "working-tree",
+            riskScore: 10,
+            verdict: .proceed,
+            calibration: Calibration(confidence: 0.1, totalCommits: 1, incidentCommits: 1),
+            files: [file("a.swift", risk: 10)]
+        )
+        let rendered = MarkdownReporter.render(single)
+        XCTAssertTrue(rendered.contains("(1 incident / 1 commit)."), rendered)
+        XCTAssertFalse(rendered.contains("1 incidents"))
+    }
+
     // MARK: - Table order (riskiest first)
 
     func testTableRowsAreRiskiestFirst() {

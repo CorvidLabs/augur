@@ -1,3 +1,4 @@
+@preconcurrency import Foundation
 import XCTest
 @testable import AugurKit
 
@@ -396,6 +397,48 @@ final class CoverageTests: XCTestCase {
         let gap = try XCTUnwrap(file.signals.first { $0.name == "test-gap" })
         // File matched, but changed line 99 is not instrumented → heuristic 0.7.
         XCTAssertEqual(gap.risk, 0.7, accuracy: 0.0001)
+    }
+
+    // MARK: - Loading from disk
+
+    /// A missing file must say it does not exist, not "could not detect format".
+    func testLoadMissingFileThrowsFileNotFound() {
+        let missing = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("augur-missing-\(UUID().uuidString).info")
+        XCTAssertThrowsError(try CoverageParser.load(path: missing)) { error in
+            guard case CoverageParser.ParseError.fileNotFound(let path) = error else {
+                return XCTFail("expected fileNotFound, got \(error)")
+            }
+            XCTAssertEqual(path, missing)
+            XCTAssertTrue(error.localizedDescription.contains("does not exist"), error.localizedDescription)
+        }
+    }
+
+    /// Garbage that parses to zero records must be rejected, not silently
+    /// "loaded" (which would leave test-gap looking coverage-backed).
+    func testLoadGarbageFileThrowsEmptyReport() throws {
+        let path = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("augur-garbage-\(UUID().uuidString).info")
+        try "this is not lcov\n".write(toFile: path, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        XCTAssertThrowsError(try CoverageParser.load(path: path)) { error in
+            guard case CoverageParser.ParseError.emptyReport(let reported) = error else {
+                return XCTFail("expected emptyReport, got \(error)")
+            }
+            XCTAssertEqual(reported, path)
+            XCTAssertTrue(error.localizedDescription.contains("no coverage records"), error.localizedDescription)
+        }
+    }
+
+    /// A real report still loads from disk.
+    func testLoadValidLCOVFromDisk() throws {
+        let path = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("augur-valid-\(UUID().uuidString).info")
+        try "SF:src/a.swift\nDA:1,1\nDA:2,0\nend_of_record\n".write(toFile: path, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let report = try CoverageParser.load(path: path)
+        XCTAssertEqual(report.files.count, 1)
+        XCTAssertEqual(report.files["src/a.swift"]?.covered, [1])
     }
 
     // MARK: - Fixtures

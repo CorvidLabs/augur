@@ -74,6 +74,11 @@ suffix matching is unambiguous.
 
 ## Malformed input
 
-The parsers degrade gracefully: malformed or empty LCOV/Cobertura/JaCoCo/Go
-inputs yield a sensible empty (or partial) report rather than crashing. An input
-whose format cannot be detected at all throws `CoverageParser.ParseError.undetectableFormat`.
+The parsers degrade gracefully on partially malformed input, but a file is
+never "loaded" silently with nothing in it: `CoverageParser.load(path:)` throws
+`ParseError.fileNotFound` for a missing file and `ParseError.emptyReport` when
+the file parses to zero per-file records (e.g. garbage with a coverage
+extension). An input whose format cannot be detected at all throws
+`CoverageParser.ParseError.undetectableFormat`. The CLI treats an unusable
+explicit `--coverage` file as a hard error; an unusable auto-detected file at
+the repo root warns to stderr and falls back to the heuristic test-gap.

@@ -97,6 +97,131 @@ struct AugurConfig: Decodable, Sendable {
     }
 }
 
+// MARK: - Unknown-Key Detection
+
+/// A structural mirror of a TOML document: tables, arrays, and scalars.
+///
+/// `TOMLDecoder` silently ignores any key the target type does not declare, so a
+/// typo'd security rule (`[[sensitivity.rules]]` instead of `[[rules]]`) would
+/// fail open. Walking the raw `TOMLTable` exposes every key actually present so
+/// it can be validated against the known schema.
+internal enum TOMLShape: Sendable, Equatable {
+    case table([String: TOMLShape])
+    case array([TOMLShape])
+    case scalar
+
+    /// The shape of a raw TOML table. Inline values (including inline tables
+    /// and value arrays) appear as `.scalar`, which the schema walk treats as
+    /// "known here, not descended into" — never a false positive.
+    internal static func shape(of table: TOMLTable) -> TOMLShape {
+        var entries: [String: TOMLShape] = [:]
+        for key in table.keys {
+            if let child = try? table.table(forKey: key) {
+                entries[key] = shape(of: child)
+            } else if let child = try? table.array(forKey: key) {
+                entries[key] = shape(of: child)
+            } else {
+                entries[key] = .scalar
+            }
+        }
+        return .table(entries)
+    }
+
+    /// The shape of a raw TOML array (e.g. an `[[rules]]` array of tables).
+    internal static func shape(of array: TOMLArray) -> TOMLShape {
+        var elements: [TOMLShape] = []
+        for index in 0..<array.count {
+            if let child = try? array.table(atIndex: index) {
+                elements.append(shape(of: child))
+            } else if let child = try? array.array(atIndex: index) {
+                elements.append(shape(of: child))
+            } else {
+                elements.append(.scalar)
+            }
+        }
+        return .array(elements)
+    }
+}
+
+/// The schema of keys `.augur.toml` understands, used to reject unknown keys so
+/// a typo cannot silently disable configuration.
+internal enum ConfigSchema {
+    internal indirect enum Node: Sendable {
+        case table([String: Node])
+        case array(Node)
+        case scalar
+    }
+
+    /// One unknown key found in a document: its dotted path and the valid keys
+    /// at that level (for the error message).
+    internal struct UnknownKey: Equatable, Sendable {
+        internal let path: String
+        internal let validKeys: [String]
+    }
+
+    /// Every key `.augur.toml` understands, in the snake_case the file uses.
+    internal static let root: Node = .table([
+        "thresholds": .table(["review": .scalar, "block": .scalar]),
+        "weights": .table([
+            "sensitivity": .scalar,
+            "test_gap": .scalar,
+            "churn": .scalar,
+            "coupling": .scalar,
+            "diff_shape": .scalar,
+            "ownership": .scalar,
+            "incident": .scalar,
+            "codeowners": .scalar,
+        ]),
+        "rules": .array(.table(["label": .scalar, "risk": .scalar, "fragments": .array(.scalar)])),
+        "sensitivity": .table(["replace_defaults": .scalar]),
+        "exclude": .table(["paths": .array(.scalar)]),
+    ])
+
+    /// The unknown key paths in a document shape (e.g. `sensitivity.rules`),
+    /// sorted for deterministic messages. Empty when every key is recognized.
+    /// - Parameter shape: The document's structural shape.
+    /// - Returns: The unknown keys with their valid siblings.
+    internal static func unknownKeys(in shape: TOMLShape) -> [UnknownKey] {
+        walk(shape, schema: root, path: "")
+    }
+
+    private static func walk(_ shape: TOMLShape, schema: Node, path: String) -> [UnknownKey] {
+        switch (shape, schema) {
+        case (.table(let entries), .table(let known)):
+            var knownByNormalizedKey: [String: Node] = [:]
+            for (key, node) in known { knownByNormalizedKey[normalize(key)] = node }
+            var result: [UnknownKey] = []
+            for (key, value) in entries.sorted(by: { $0.key < $1.key }) {
+                let childPath = path.isEmpty ? key : "\(path).\(key)"
+                if let childSchema = knownByNormalizedKey[normalize(key)] {
+                    result += walk(value, schema: childSchema, path: childPath)
+                } else {
+                    result.append(UnknownKey(path: childPath, validKeys: known.keys.sorted()))
+                }
+            }
+            return result
+        case (.array(let elements), .array(let elementSchema)):
+            var result: [UnknownKey] = []
+            for (index, element) in elements.enumerated() {
+                result += walk(element, schema: elementSchema, path: "\(path)[\(index)]")
+            }
+            return result
+        default:
+            // A shape/schema kind mismatch (e.g. a table where a number belongs)
+            // is a type error; decoding reports it with a better message.
+            return []
+        }
+    }
+
+    /// Normalizes a key for comparison so `test_gap`, `testGap`, and `test-gap`
+    /// all match the same schema entry.
+    internal static func normalize(_ key: String) -> String {
+        key.lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+    }
+}
+
 // MARK: - Loading
 
 /// Loads and resolves `.augur.toml` configuration for the CLI.
@@ -110,6 +235,94 @@ enum ConfigLoader {
     static func decode(text: String) throws -> AugurConfig {
         let decoder = TOMLDecoder(strategy: .init(key: .convertFromSnakeCase))
         return try decoder.decode(AugurConfig.self, from: text)
+    }
+
+    /// Parses the raw structural shape of a TOML document (keys verbatim,
+    /// no snake-case conversion), for unknown-key detection.
+    /// - Parameter text: The TOML document.
+    /// - Returns: The document's shape.
+    static func shape(of text: String) throws -> TOMLShape {
+        TOMLShape.shape(of: try TOMLTable(source: text))
+    }
+
+    /// Throws `ConfigError.unknownKeys` when the document contains keys augur
+    /// does not understand, so a typo'd rule cannot silently fail open.
+    ///
+    /// A document whose shape cannot be decoded at all is left to the main
+    /// decode, which reports the parse error with a better message.
+    /// - Parameters:
+    ///   - text: The TOML document.
+    ///   - path: The file path, for the error message.
+    static func checkUnknownKeys(text: String, path: String) throws {
+        guard let shape = try? shape(of: text) else { return }
+        let unknown = ConfigSchema.unknownKeys(in: shape)
+        guard !unknown.isEmpty else { return }
+        let details = unknown.map { "'\($0.path)' (expected one of: \($0.validKeys.joined(separator: ", ")))" }
+        throw ConfigError.unknownKeys(path: path, details: details)
+    }
+
+    /// Renders a `DecodingError` from TOML config decoding as a human-readable
+    /// message naming the offending key path, instead of dumping the raw Swift
+    /// error (which can mention internal types like `OffsetDateTime`).
+    /// - Parameter error: The decoding error.
+    /// - Returns: A one-line human-readable description.
+    static func describe(_ error: DecodingError) -> String {
+        switch error {
+        case .typeMismatch(let type, let context), .valueNotFound(let type, let context):
+            let expected = friendlyName(of: type).map { " (expected \($0))" } ?? ""
+            return "key '\(keyPath(context.codingPath))' has the wrong type or value\(expected)"
+        case .keyNotFound(let key, let context):
+            return "required key '\(keyPath(context.codingPath + [key]))' is missing"
+        case .dataCorrupted(let context):
+            if context.codingPath.isEmpty {
+                return "could not parse TOML: \(context.debugDescription)"
+            }
+            return "key '\(keyPath(context.codingPath))' is invalid: \(context.debugDescription)"
+        @unknown default:
+            return String(describing: error)
+        }
+    }
+
+    /// Joins a coding path into a dotted, snake_cased key path with `[N]` array
+    /// indices, matching how the key appears in the TOML file.
+    private static func keyPath(_ codingPath: [any CodingKey]) -> String {
+        var rendered = ""
+        for key in codingPath {
+            if let index = key.intValue {
+                rendered += "[\(index)]"
+            } else {
+                rendered += rendered.isEmpty ? snakeCased(key.stringValue) : ".\(snakeCased(key.stringValue))"
+            }
+        }
+        return rendered.isEmpty ? "(document root)" : rendered
+    }
+
+    /// Converts a camelCase coding key back to the snake_case the file uses
+    /// (the decoder converts `test_gap` to `testGap` before erroring).
+    private static func snakeCased(_ key: String) -> String {
+        var result = ""
+        for character in key {
+            if character.isUppercase {
+                result.append("_")
+                result.append(Character(character.lowercased()))
+            } else {
+                result.append(character)
+            }
+        }
+        return result
+    }
+
+    /// A user-facing name for an expected decoded type, or `nil` for types the
+    /// user should never see (the decoder can report internal placeholder types
+    /// like `OffsetDateTime` after exhausting its coercion attempts).
+    private static func friendlyName(of type: Any.Type) -> String? {
+        switch type {
+        case is Double.Type, is Float.Type: return "a number"
+        case is Int.Type, is Int64.Type: return "an integer"
+        case is String.Type: return "a string"
+        case is Bool.Type: return "a boolean (true/false)"
+        default: return nil
+        }
     }
 
     /// Resolves which config to use, honoring `--config` / `--no-config` and
@@ -141,9 +354,12 @@ enum ConfigLoader {
             throw ConfigError.unreadable(path)
         }
         let text = String(decoding: data, as: UTF8.self)
+        try checkUnknownKeys(text: text, path: path)
         let config: AugurConfig
         do {
             config = try decode(text: text)
+        } catch let error as DecodingError {
+            throw ConfigError.invalid(path: path, underlying: describe(error))
         } catch {
             throw ConfigError.invalid(path: path, underlying: String(describing: error))
         }
@@ -175,6 +391,7 @@ enum ConfigLoader {
 enum ConfigError: Error, LocalizedError, Sendable {
     case unreadable(String)
     case invalid(path: String, underlying: String)
+    case unknownKeys(path: String, details: [String])
 
     var errorDescription: String? {
         switch self {
@@ -182,6 +399,11 @@ enum ConfigError: Error, LocalizedError, Sendable {
             return "Could not read config at \(path)"
         case .invalid(let path, let underlying):
             return "Invalid config at \(path): \(underlying)"
+        case .unknownKeys(let path, let details):
+            let noun = details.count == 1 ? "key" : "keys"
+            return "Invalid config at \(path): unknown \(noun) \(details.joined(separator: "; ")). "
+                + "Unknown keys are rejected so a typo cannot silently disable a rule; "
+                + "rename or remove them (or pass --no-config to ignore the file)."
         }
     }
 }

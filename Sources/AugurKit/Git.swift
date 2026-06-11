@@ -64,7 +64,14 @@ public struct GitRepository: RepositoryProbe {
         // splits renames into `added\tdeleted\t<NUL>oldpath<NUL>newpath` so we can
         // resolve the synthetic `old => new` brace path to the real new path.
         let numstat = try run(["diff", "--numstat", "-z"] + Self.scopeArgs(scope))
-        let files = Self.parseNumstat(numstat)
+        var files = Self.parseNumstat(numstat)
+        // A working-tree assessment must see brand-new (never-`git add`ed) files:
+        // `git diff HEAD` is silent about them, which would let a risk gate score
+        // a fully untracked change as zero risk. Tracked paths win on collision.
+        if scope == .workingTree {
+            let tracked = Set(files.map(\.path))
+            files += try untrackedFiles().filter { !tracked.contains($0.path) }
+        }
         // Best-effort: enrich with added line ranges for per-line coverage.
         let added = (try? addedLines(in: scope)) ?? [:]
         guard !added.isEmpty else { return files }
@@ -74,14 +81,61 @@ public struct GitRepository: RepositoryProbe {
                 linesAdded: file.linesAdded,
                 linesDeleted: file.linesDeleted,
                 isBinary: file.isBinary,
-                addedLines: added[file.path] ?? []
+                addedLines: added[file.path] ?? file.addedLines
             )
         }
     }
 
     public func addedLines(in scope: DiffScope) throws -> [String: [Int]] {
         let output = try run(["diff", "--unified=0", "--no-color"] + Self.scopeArgs(scope), allowFailure: true)
-        return Self.parseUnifiedZeroAddedLines(output)
+        var result = Self.parseUnifiedZeroAddedLines(output)
+        // Untracked files never appear in `git diff`; every line of a new file is
+        // an added line, so coverage and SARIF regions still line up.
+        if scope == .workingTree {
+            for file in (try? untrackedFiles()) ?? [] where !file.addedLines.isEmpty {
+                result[file.path] = file.addedLines
+            }
+        }
+        return result
+    }
+
+    /// Files present in the work tree but unknown to git, via
+    /// `git ls-files --others --exclude-standard -z` (which honors `.gitignore`).
+    ///
+    /// Each is reported as a fully-added file: `linesAdded` is its on-disk line
+    /// count, `linesDeleted` is `0`, and `addedLines` spans every line, so an
+    /// untracked file is assessed exactly like a newly added one.
+    internal func untrackedFiles() throws -> [ChangedFile] {
+        let output = try run(["ls-files", "--others", "--exclude-standard", "-z"], allowFailure: true)
+        let paths = output.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)
+        return paths.map { relativePath in
+            let fullPath = (path as NSString).appendingPathComponent(relativePath)
+            let data = FileManager.default.contents(atPath: fullPath) ?? Data()
+            let isBinary = Self.looksBinary(data)
+            let lineCount = isBinary ? 0 : Self.lineCount(of: data)
+            return ChangedFile(
+                path: relativePath,
+                linesAdded: lineCount,
+                linesDeleted: 0,
+                isBinary: isBinary,
+                addedLines: lineCount > 0 ? Array(1...lineCount) : []
+            )
+        }
+    }
+
+    /// Mirrors git's own binary heuristic: a NUL byte in the first 8000 bytes.
+    static func looksBinary(_ data: Data) -> Bool {
+        data.prefix(8000).contains(0)
+    }
+
+    /// Number of lines in a text blob: newline count, plus one for a final
+    /// unterminated line. An empty blob has zero lines.
+    static func lineCount(of data: Data) -> Int {
+        guard !data.isEmpty else { return 0 }
+        var count = 0
+        for byte in data where byte == 0x0A { count += 1 }
+        if data.last != 0x0A { count += 1 }
+        return count
     }
 
     /// Maps a `DiffScope` to its `git diff` argument(s).
@@ -230,7 +284,11 @@ public struct GitRepository: RepositoryProbe {
         let argv = ["git", "-C", path, "-c", "core.quotepath=false"] + arguments
         let result = try ProcessRunner.run(argv)
         guard allowFailure || result.status == 0 else {
-            throw AugurError.git(command: arguments.joined(separator: " "), status: result.status)
+            throw AugurError.git(
+                command: arguments.joined(separator: " "),
+                status: result.status,
+                stderr: result.errorOutput
+            )
         }
         return result.output
     }
@@ -239,7 +297,7 @@ public struct GitRepository: RepositoryProbe {
 // MARK: - Process Runner
 
 /// Spawns a child process via `posix_spawn` and reaps it with a synchronous
-/// `waitpid`, capturing stdout through a temporary file.
+/// `waitpid`, capturing stdout and stderr through temporary files.
 ///
 /// This deliberately avoids `Foundation.Process`. On Linux, `Foundation.Process`
 /// monitors child termination asynchronously and can miss a fast-exiting child
@@ -251,14 +309,22 @@ internal enum ProcessRunner {
     internal struct Result: Sendable {
         internal let status: Int32
         internal let output: String
+        internal let errorOutput: String
     }
 
-    /// Runs `/usr/bin/env <argv>` with stdout captured and stderr discarded.
+    /// Runs `/usr/bin/env <argv>` with stdout and stderr captured, so a failing
+    /// child's diagnostic (e.g. git's `fatal: ...`) can be surfaced to the user.
     internal static func run(_ argv: [String]) throws -> Result {
-        let outputPath = (NSTemporaryDirectory() as NSString)
-            .appendingPathComponent("augur-git-\(UUID().uuidString)")
+        let base = NSTemporaryDirectory() as NSString
+        let token = UUID().uuidString
+        let outputPath = base.appendingPathComponent("augur-git-\(token)")
+        let errorPath = base.appendingPathComponent("augur-git-err-\(token)")
         FileManager.default.createFile(atPath: outputPath, contents: nil)
-        defer { try? FileManager.default.removeItem(atPath: outputPath) }
+        FileManager.default.createFile(atPath: errorPath, contents: nil)
+        defer {
+            try? FileManager.default.removeItem(atPath: outputPath)
+            try? FileManager.default.removeItem(atPath: errorPath)
+        }
 
         let executable = "/usr/bin/env"
         let fullArgv = [executable] + argv
@@ -274,7 +340,7 @@ internal enum ProcessRunner {
         posix_spawn_file_actions_init(&fileActions)
         defer { posix_spawn_file_actions_destroy(&fileActions) }
         posix_spawn_file_actions_addopen(&fileActions, 1, outputPath, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
-        posix_spawn_file_actions_addopen(&fileActions, 2, "/dev/null", O_WRONLY, 0)
+        posix_spawn_file_actions_addopen(&fileActions, 2, errorPath, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
 
         let cArgs: [UnsafeMutablePointer<CChar>?] = fullArgv.map { strdup($0) } + [nil]
         defer { for case let arg? in cArgs { free(arg) } }
@@ -289,7 +355,7 @@ internal enum ProcessRunner {
         var pid: pid_t = 0
         let spawnResult = posix_spawn(&pid, executable, &fileActions, nil, cArgs, cEnv)
         guard spawnResult == 0 else {
-            throw AugurError.git(command: argv.joined(separator: " "), status: spawnResult)
+            throw AugurError.git(command: argv.joined(separator: " "), status: spawnResult, stderr: "")
         }
 
         var rawStatus: Int32 = 0
@@ -297,6 +363,11 @@ internal enum ProcessRunner {
         let status: Int32 = (rawStatus & 0x7f) == 0 ? (rawStatus >> 8) & 0xff : rawStatus & 0x7f
 
         let data = (try? Data(contentsOf: URL(fileURLWithPath: outputPath))) ?? Data()
-        return Result(status: status, output: String(decoding: data, as: UTF8.self))
+        let errorData = (try? Data(contentsOf: URL(fileURLWithPath: errorPath))) ?? Data()
+        return Result(
+            status: status,
+            output: String(decoding: data, as: UTF8.self),
+            errorOutput: String(decoding: errorData, as: UTF8.self)
+        )
     }
 }

@@ -1,6 +1,6 @@
 ---
 module: change-confidence
-version: 11
+version: 12
 status: draft
 files:
   - Sources/AugurKit/Models.swift
@@ -95,6 +95,7 @@ The scoring has two layers:
 | `SensitivityRuleset.default` | Built-in rules: secrets, auth, crypto, payments, migration, infra, ci, dependencies. |
 | `SensitivityRuleset.match(_:rules:)` | Highest-severity matching rule for a path, if any. |
 | `TestHeuristics.isTestFile(_:)` | Language-agnostic test-file detection. |
+| `DocumentationHeuristics.isDocumentationFile(_:)` | Documentation/prose detection (known doc extensions like `.md`/`.rst`/`.txt`, plus extension-less conventional basenames like `LICENSE`/`README`); keeps the test-gap signal from firing on files that cannot carry tests. |
 
 ### Path Exclusion
 
@@ -118,11 +119,11 @@ The scoring has two layers:
 | `CoverageReport` | Parsed line coverage keyed by file; `query(path:changedLines:)` and `matchFile(diffPath:)`. |
 | `CoverageReport.FileCoverage` | Per-file instrumented and covered line-number sets. |
 | `CoverageQuery` | Result of a query: `covered`, `instrumented`, `fileMatched`, and `coveredFraction` (`nil` when nothing instrumented). |
-| `CoverageParser.load(path:)` | Loads and parses an LCOV (`.info`), Cobertura/JaCoCo (`.xml`), or Go coverprofile (`.out`) file from disk. |
+| `CoverageParser.load(path:)` | Loads and parses an LCOV (`.info`), Cobertura/JaCoCo (`.xml`), or Go coverprofile (`.out`) file from disk; throws `fileNotFound` for a missing/unreadable file and `emptyReport` when the file parses to zero per-file records. |
 | `CoverageParser.parse(contents:path:)` | Parses report text, auto-detecting the format. |
 | `CoverageParser.parseLCOV(_:)` / `parseCobertura(_:)` / `parseJaCoCo(_:)` / `parseGoProfile(_:)` | Format-specific parsers (Foundation-only; Cobertura and JaCoCo via `XMLParser`, LCOV and Go coverprofile by line parsing). |
 | `CoverageParser.detectFormat(path:contents:)` | Detects `.lcov` / `.cobertura` / `.jacoco` / `.go` by extension then content sniffing. |
-| `CoverageParser.Format` (`lcov`, `cobertura`, `jacoco`, `go`) / `CoverageParser.ParseError` | The format enum and parse-failure errors. |
+| `CoverageParser.Format` (`lcov`, `cobertura`, `jacoco`, `go`) / `CoverageParser.ParseError` | The format enum and parse-failure errors (`fileNotFound`, `undetectableFormat`, `emptyReport`, `malformedXML`; `Equatable`). |
 
 ### Types & Enums
 
@@ -138,7 +139,7 @@ The scoring has two layers:
 | `Calibration` | `confidence` (0...1), `totalCommits`, `incidentCommits`, and a `band`. |
 | `CalibrationCache` | `Codable` projection of a `HistorySnapshot` pinned to a `head` SHA; `confidence`, `band`, `jsonData()`, `decoded(from:)`. |
 | `Assessment` | Overall `riskScore`, `verdict`, `calibration`, `thresholds`, per-file results, and `excludedPaths` (sorted paths dropped by a `PathFilter`; `excludedCount` is its size). |
-| `AugurError` | `notARepository`, `git`, `noChanges`. |
+| `AugurError` | `notARepository`, `git(command:status:stderr:)` (carries the child's captured stderr, rendered into the message when non-empty), `noChanges`. |
 
 ## Invariants
 
@@ -159,6 +160,9 @@ The scoring has two layers:
 - Coverage path matching is by normalized longest-suffix at component boundaries; exact (normalized) matches win, ties break by shorter then lexicographically-smaller reported path. Diff/coverage prefix differences are tolerated; identical suffixes across distinct files are ambiguous (documented limitation).
 - `Augur.assess` is pure with respect to an injected `now`, enabling reproducible tests. No current signal scores elapsed time, so `now` does not affect the verdict; it is reserved for a future time-based signal and exposed via `HistorySnapshot.daysSinceTouched(_:now:)`.
 - `GitRepository` reads changed paths verbatim: `changedFiles(in:)` uses `git diff --numstat -z` (NUL-delimited, unquoted), and every git invocation runs with `-c core.quotepath=false`. A renamed/copied file resolves to its NEW path (not git's synthetic `{old => new}` brace string), with a pure rename (0 added / 0 deleted) yielding zero churn. Non-ASCII paths (e.g. `café.go`) round-trip as verbatim UTF-8, so CODEOWNERS, `--exclude`, coverage matching, and the SARIF `artifactLocation.uri` all see the real path. These guarantees are covered by on-disk integration tests against a temporary repository.
+- A `workingTree` assessment includes **untracked** files (`git ls-files --others --exclude-standard`, honoring `.gitignore`): each is reported as a fully-added `ChangedFile` (`linesAdded` = its on-disk line count, `linesDeleted == 0`, `addedLines` spanning every line; a blob with a NUL byte in its first 8000 bytes is binary with no line data), so a brand-new file is never invisible to a risk gate. `staged` and `range` scopes remain exact diffs and never gain untracked files; a tracked path wins on collision. `GitRepository.addedLines(in:)` covers untracked files in the `workingTree` scope too, so coverage scoring and SARIF regions line up.
+- A failing git invocation surfaces the child's captured stderr: `AugurError.git(command:status:stderr:)` carries it, and the rendered message appends the trimmed stderr (e.g. git's `fatal: ambiguous argument ...`) when non-empty.
+- The test-gap signal never fires on prose: a changed file matching `DocumentationHeuristics.isDocumentationFile` (and not a test file) scores test-gap `risk 0` ("documentation, not unit-testable") regardless of coverage, so a docs-only change is not penalized for lacking tests. Code files keep the existing heuristic/coverage behavior.
 - Path exclusion happens **before** scoring: a changed file whose path matches any `PathFilter` pattern is removed from the change surface, so it appears in neither `Assessment.files` nor any signal, and is recorded in `Assessment.excludedPaths` (sorted). A `nil` or empty filter excludes nothing and yields an `Assessment` identical to passing no filter (`excludedPaths == []`). Exclusion is deterministic (`GlobPattern` matching uses no `Date`/randomness) and `GlobPattern`/`PathFilter` are Foundation-only (no third-party dependency). When the scope has changed files but *every* one is excluded, `assess` does **not** throw: it returns a normal `Assessment` with empty `files`, the populated `excludedPaths`, verdict `proceed`, and `riskScore == 0`, so the exclusions stay visible in human and JSON output. `assess` throws `AugurError.noChanges` only when the scope had no changed files at all (before filtering).
 - `GlobPattern` is whole-path anchored: `*` matches within a single path segment (never `/`), `**` matches across segments and also zero segments (so `vendor/**` matches the bare `vendor`), and `?` matches exactly one character. Paths are normalized (leading `./`, repeated and trailing slashes) before matching.
 - SARIF output is a lossless-enough projection of an `Assessment`: `SarifReport(from:)` emits exactly one `run` with one `result` per assessed file (in assessment order), `version == "2.1.0"`, and one reporting descriptor (`augur/change-risk`). Each result's `level` is `SarifReport.Level.from(verdict:)` under the assessment's thresholds — `block → error`, `review → warning`, `proceed → note` — and carries `riskScore`/`confidence`/`verdict` in `result.properties`. A result's `region.startLine` is the file's smallest added line when `addedLines` is non-empty, otherwise the region is omitted.
@@ -166,7 +170,8 @@ The scoring has two layers:
 
 ## Behavioral Examples
 
-- A 3-line docs edit, no sensitive paths, tests untouched → `proceed` (risk `< 35`).
+- A 3-line docs edit, no sensitive paths, tests untouched → `proceed` (risk `< 35`); its test-gap signal is `0` ("documentation, not unit-testable"), so a docs-only change can score near `0` instead of being penalized for carrying no tests. `isDocumentationFile` accepts `README.md`, `docs/guide.rst`, `notes.TXT`, `LICENSE`, and `CHANGELOG`, but not `src/service.swift`, `changelog.swift`, or `Makefile`.
+- `touch src/new.swift` (never `git add`ed) then a `workingTree` assessment reports `src/new.swift` as a changed file with `linesAdded` equal to its line count and `addedLines == [1...N]`; the same file is absent from `staged` and `range` assessments, and a `.gitignore`d file is absent everywhere.
 - A 160-line edit to `src/auth/token.swift` with no test in the changeset → at least `review`; the `sensitivity` and `test-gap` signals are non-zero.
 - The same source change *with* a sibling test file in the changeset scores strictly lower than without it.
 - A file repeatedly implicated in `Revert "..."` commits, in a repo with deep history, raises the `incident` signal and reports `calibration.confidence > 0.5`.
@@ -189,7 +194,8 @@ The scoring has two layers:
 ## Error Cases
 
 - `AugurError.notARepository(path)` — `GitRepository.validate()` finds no git work tree at `path`.
-- `AugurError.git(command:status:)` — an underlying `git` invocation exits non-zero.
+- `AugurError.git(command:status:stderr:)` — an underlying `git` invocation exits non-zero; `stderr` carries the child's captured diagnostic and is appended to the rendered message when non-empty.
+- `CoverageParser.ParseError.fileNotFound(path)` — `load(path:)` on a missing/unreadable file (distinct from `undetectableFormat`, which means the contents could not be classified). `ParseError.emptyReport(path)` — the file parsed to zero per-file records (e.g. garbage with a coverage extension); a report must never "load" silently with nothing in it.
 - `AugurError.noChanges`: the requested scope contains no changed files at all (before any `PathFilter` is applied); the CLI treats this as a clean `proceed`. A scope that does have changed files but excludes every one does not throw: it yields a `proceed` `Assessment` with empty `files` and populated `excludedPaths`.
 
 ## Dependencies
@@ -201,6 +207,7 @@ The scoring has two layers:
 
 ## Change Log
 
+- v12: Hands-on hardening: no silent under-reporting, no silent fail-open. **Untracked files are assessed**: `GitRepository.changedFiles(in: .workingTree)` appends `git ls-files --others --exclude-standard` results as fully-added files (on-disk line count, `addedLines` spanning every line, NUL-sniffed binary flag); `staged`/`range` scopes are unchanged, and `addedLines(in:)` covers untracked files too. **Git stderr surfaces**: `AugurError.git` gains a `stderr` associated value (breaking enum-case change), captured by `ProcessRunner` and appended to the rendered message, so a bad range reports git's own `fatal: ...` instead of a bare exit code. **Coverage loading fails loudly**: `CoverageParser.ParseError` gains `fileNotFound` (a missing file no longer reads as "could not detect format") and `emptyReport` (zero parsed records is an error, not a silent no-op load); `ParseError` is now `Equatable`. **Docs don't owe tests**: new `DocumentationHeuristics.isDocumentationFile(_:)`, and the test-gap signal scores `0` ("documentation, not unit-testable") for prose files, so docs-only changes can score near zero. Reporter/markdown calibration lines and churn/diff-shape details now pluralize correctly ("1 incident", "1 line touched"). CLI (no `AugurKit` surface): `.augur.toml` parsing rejects unknown keys with the offending key path and valid siblings (a typo'd `[[sensitivity.rules]]` is a hard error instead of failing open), TOML decode errors render as human-readable key-path messages, `--staged` + `--range` is a usage error (exit 64), an invalid `gate --threshold` reports gate's own usage, and an unusable auto-detected coverage file warns and falls back instead of being silently "loaded". `AugurKit` remains free of third-party dependencies.
 - v11: Exclusion transparency when the filter drops every changed file. `Augur.assess(...)` (both overloads) no longer throws `AugurError.noChanges` when the scope had changed files but a `PathFilter` excluded all of them; instead it returns a normal `Assessment` with empty `files`, the populated `excludedPaths`, verdict `proceed`, and `riskScore == 0`, so a risk tool never silently hides what it dropped. `noChanges` is now thrown only for a genuinely empty scope (no changed files before filtering). The human reporter and markdown report add a "nothing left to assess" note in this all-excluded case, and JSON continues to surface `excludedPaths`. No public type signatures changed. `Glob.translate` anchors the compiled regex with `\A` / `\z` (instead of `^` / `$`) so a glob cannot match across a stray trailing newline. `AugurKit` remains free of third-party dependencies.
 - v10: Correct git-layer path handling for renames and non-ASCII filenames. `GitRepository.changedFiles(in:)` now reads `git diff --numstat -z` (NUL-delimited records that disable path quoting and split a rename/copy into `added\tdeleted\t\0<oldpath>\0<newpath>`), and `parseNumstat` resolves a rename to its NEW path rather than git's synthetic `{old => new}` brace string (a pure rename has zero churn). Every git invocation now runs with `-c core.quotepath=false`, so non-ASCII paths round-trip as verbatim UTF-8 instead of octal-escaped, fixing CODEOWNERS / `--exclude` / coverage matching and the `diff --unified=0` and `log --name-only` paths. These behaviors are proven by on-disk integration tests. No public type signatures changed; the recency over-claim in docs was corrected (no signal scores elapsed time; `now` is reserved). CLI quick wins: `--sarif` help lists all three exclusive formats, and custom `[weights]` that do not sum to ~1.0 emit a non-fatal stderr warning.
 - v9: Native markdown report for PR-level visibility (`MarkdownReporter.swift`, Foundation-only). New `Sendable` `MarkdownReporter` with `static func render(_:) -> String` producing deterministic GitHub-flavored markdown: a verdict heading (`### augur: <emoji> <VERDICT> - risk <N>/100`, emoji `proceed → ✅`, `review → ⚠️`, `block → ⛔`, no em-dashes), a `Confidence <N>/100 - calibration <band> (<incidents> incidents / <commits> commits).` line, a `| File | Risk | Verdict | Top signal |` table riskiest-first (ties broken by path; "Top signal" is the file's highest weight*risk signal detail, `-` when none), capped at `maxRows` (`25`) rows with an "and N more files." overflow line, and a trailing `marker` (`<!-- augur-report -->`) line a CI job greps to update a sticky PR comment. Table cells escape `\`, `|`, and newlines. CLI: `check` gains `--markdown` (prints the report to stdout), mutually exclusive with `--json` and `--sarif`. `AugurKit` remains free of third-party dependencies.

@@ -51,3 +51,33 @@ public enum TestHeuristics {
         return markers.contains { lower.contains($0) }
     }
 }
+
+/// Documentation / prose detection, used to keep code-only signals (like
+/// test-gap) from firing on files that cannot carry tests.
+public enum DocumentationHeuristics {
+    /// File extensions (lowercased) that mark prose/documentation files.
+    private static let extensions: Set<String> = [
+        "md", "markdown", "mdx", "rst", "txt", "adoc", "asciidoc", "org", "rdoc", "textile", "pod",
+    ]
+
+    /// Extension-less basenames (lowercased) conventionally used for prose
+    /// (e.g. `LICENSE`, `README`). Only matched when the file has no extension,
+    /// so `changelog.swift` stays code.
+    private static let basenames: Set<String> = [
+        "readme", "license", "licence", "copying", "notice", "authors", "contributors", "changelog",
+    ]
+
+    /// Whether the path looks like documentation/prose rather than code.
+    /// - Parameter path: A repository-relative file path.
+    /// - Returns: `true` for known documentation extensions, or for an
+    ///   extension-less conventional prose basename.
+    public static func isDocumentationFile(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        let base = lower.split(separator: "/").last.map(String.init) ?? lower
+        let parts = base.split(separator: ".", omittingEmptySubsequences: true)
+        if parts.count > 1, let last = parts.last, extensions.contains(String(last)) {
+            return true
+        }
+        return parts.count <= 1 && basenames.contains(base)
+    }
+}

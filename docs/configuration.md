@@ -8,6 +8,12 @@ strictly additive.
 The file is parsed entirely in the CLI layer (via `TOMLDecoder`); `AugurKit`
 never sees TOML. Keys use `snake_case` and map to the engine's camelCase fields.
 
+Parsing is **strict about key names**: a key augur does not recognize (e.g. a
+typo'd `[[sensitivity.rules]]` instead of `[[rules]]`, or `patterns` instead of
+`fragments`) is a hard error naming the unknown key and the valid keys at that
+level. A misspelled security rule must fail loudly, not silently fail open.
+Pass `--no-config` to ignore the file entirely.
+
 ## Full reference
 
 ```toml

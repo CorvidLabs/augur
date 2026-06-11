@@ -196,14 +196,20 @@ public enum CoverageParser {
     }
 
     /// Parsing failures surfaced to callers.
-    public enum ParseError: Error, LocalizedError, Sendable {
+    public enum ParseError: Error, LocalizedError, Equatable, Sendable {
+        case fileNotFound(String)
         case undetectableFormat
+        case emptyReport(String)
         case malformedXML(String)
 
         public var errorDescription: String? {
             switch self {
+            case .fileNotFound(let path):
+                return "Coverage file does not exist: \(path)"
             case .undetectableFormat:
                 return "Could not detect coverage format (expected LCOV, Cobertura/JaCoCo XML, or Go coverprofile)."
+            case .emptyReport(let path):
+                return "Coverage report contains no coverage records: \(path) (is it a valid LCOV, Cobertura/JaCoCo XML, or Go coverprofile?)"
             case .malformedXML(let detail):
                 return "Malformed coverage XML: \(detail)"
             }
@@ -260,17 +266,26 @@ public enum CoverageParser {
     }
 
     /// Loads and parses a coverage file from disk, auto-detecting the format.
+    ///
+    /// A report that parses to zero per-file records is rejected
+    /// (`ParseError.emptyReport`): silently "loading" garbage would leave the
+    /// test-gap signal looking coverage-backed when it is not.
     /// - Parameter path: The path to a coverage report (LCOV `.info`, Cobertura
     ///   or JaCoCo `.xml`, or a Go `.out` coverprofile).
     /// - Returns: The parsed `CoverageReport`.
-    /// - Throws: `ParseError` on detection/parse failure, or an I/O error if the
-    ///   file cannot be read.
+    /// - Throws: `ParseError.fileNotFound` when the file does not exist or cannot
+    ///   be read, `ParseError.emptyReport` when it parses to zero records, or
+    ///   another `ParseError` on detection/parse failure.
     public static func load(path: String) throws -> CoverageReport {
         guard let data = FileManager.default.contents(atPath: path) else {
-            throw ParseError.undetectableFormat
+            throw ParseError.fileNotFound(path)
         }
         let contents = String(decoding: data, as: UTF8.self)
-        return try parse(contents: contents, path: path)
+        let report = try parse(contents: contents, path: path)
+        guard !report.files.isEmpty else {
+            throw ParseError.emptyReport(path)
+        }
+        return report
     }
 
     /// Parses coverage contents, auto-detecting the format.

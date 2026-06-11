@@ -87,6 +87,111 @@ final class GitRepositoryIntegrationTests: XCTestCase {
         XCTAssertEqual(added["café.go"], [2, 3])
     }
 
+    // MARK: - Untracked files
+
+    /// A brand-new, never-`git add`ed file must appear in a working-tree
+    /// assessment as a fully-added file; invisibility would let a risk gate
+    /// score an untracked change as zero risk.
+    func testUntrackedFileAppearsInWorkingTreeScope() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+        try repo.write("src/new.swift", "public struct New {\n    public let value: Int\n}\n")
+
+        let probe = GitRepository(path: repo.path)
+        let files = try probe.changedFiles(in: .workingTree)
+        let file = try XCTUnwrap(files.first { $0.path == "src/new.swift" }, "untracked file must be assessed")
+        XCTAssertEqual(file.linesAdded, 3)
+        XCTAssertEqual(file.linesDeleted, 0)
+        XCTAssertFalse(file.isBinary)
+        XCTAssertEqual(file.addedLines, [1, 2, 3], "every line of a new file is an added line")
+    }
+
+    /// Untracked files belong only to the working-tree scope: staged and range
+    /// diffs are exact and must not gain phantom files.
+    func testUntrackedFileAbsentFromStagedAndRangeScopes() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+        try repo.write("a.go", "package main\nfunc f() {}\n")
+        try repo.commit("change")
+        try repo.write("untracked.swift", "let x = 1\n")
+
+        let probe = GitRepository(path: repo.path)
+        let staged = try probe.changedFiles(in: .staged)
+        XCTAssertFalse(staged.contains { $0.path == "untracked.swift" })
+        let ranged = try probe.changedFiles(in: .range("HEAD~1..HEAD"))
+        XCTAssertFalse(ranged.contains { $0.path == "untracked.swift" })
+    }
+
+    /// `.gitignore`d files are not part of the change surface (`--exclude-standard`).
+    func testGitignoredFileStaysInvisible() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write(".gitignore", "ignored.log\n")
+        try repo.commit("init")
+        try repo.write("ignored.log", "noise\n")
+
+        let probe = GitRepository(path: repo.path)
+        let files = try probe.changedFiles(in: .workingTree)
+        XCTAssertFalse(files.contains { $0.path == "ignored.log" })
+    }
+
+    /// An untracked binary blob is flagged binary with no line data.
+    func testUntrackedBinaryFileIsFlaggedBinary() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+        let blobPath = (repo.path as NSString).appendingPathComponent("asset.bin")
+        try Data([0x00, 0x01, 0x02, 0xFF, 0x00]).write(to: URL(fileURLWithPath: blobPath))
+
+        let probe = GitRepository(path: repo.path)
+        let files = try probe.changedFiles(in: .workingTree)
+        let file = try XCTUnwrap(files.first { $0.path == "asset.bin" })
+        XCTAssertTrue(file.isBinary)
+        XCTAssertEqual(file.linesAdded, 0)
+        XCTAssertTrue(file.addedLines.isEmpty)
+    }
+
+    /// `addedLines(in:)` (used for SARIF regions) covers untracked files too.
+    func testUntrackedFileAppearsInAddedLinesQuery() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+        try repo.write("fresh.swift", "let a = 1\nlet b = 2\n")
+
+        let probe = GitRepository(path: repo.path)
+        let added = try probe.addedLines(in: .workingTree)
+        XCTAssertEqual(added["fresh.swift"], [1, 2])
+    }
+
+    // MARK: - Git failure diagnostics
+
+    /// A failing git invocation must surface git's own stderr (e.g. `fatal:
+    /// ambiguous argument`), not just a bare exit code.
+    func testGitFailureSurfacesStderr() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+
+        let probe = GitRepository(path: repo.path)
+        XCTAssertThrowsError(try probe.changedFiles(in: .range("nonsense..HEAD"))) { error in
+            guard case AugurError.git(let command, let status, let stderr) = error else {
+                return XCTFail("expected AugurError.git, got \(error)")
+            }
+            XCTAssertEqual(status, 128)
+            XCTAssertTrue(command.contains("nonsense..HEAD"))
+            XCTAssertTrue(stderr.contains("nonsense"), "stderr must carry git's diagnostic, got: \(stderr)")
+            let description = (error as? LocalizedError)?.errorDescription ?? ""
+            XCTAssertTrue(description.contains("fatal"), "the rendered error must include git's message, got: \(description)")
+        }
+    }
+
     // MARK: - Exclude matching
 
     /// A non-ASCII path must be matchable by an exclude glob (it was unreachable

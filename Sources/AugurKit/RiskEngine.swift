@@ -123,6 +123,10 @@ public struct RiskEngine: Sendable {
         let isTest = TestHeuristics.isTestFile(file.path)
         if isTest {
             signals.append(Signal(name: "test-gap", risk: 0, weight: weights.testGap, detail: "file is a test"))
+        } else if DocumentationHeuristics.isDocumentationFile(file.path) {
+            // Docs and other prose cannot carry unit tests; without this branch a
+            // docs-only change could never score near zero.
+            signals.append(Signal(name: "test-gap", risk: 0, weight: weights.testGap, detail: "documentation, not unit-testable"))
         } else if file.isBinary {
             signals.append(Signal(name: "test-gap", risk: 0.1, weight: weights.testGap, detail: "binary asset, not unit-testable"))
         } else if let coverage, let signal = Self.coverageTestGap(file: file, coverage: coverage, weight: weights.testGap) {
@@ -136,7 +140,7 @@ public struct RiskEngine: Sendable {
         // Churn: hot files are fragile.
         let churn = history.churnCount(file.path)
         let churnRisk = min(1, Double(churn) / 40)
-        signals.append(Signal(name: "churn", risk: churnRisk, weight: weights.churn, detail: "\(churn) recent commits touched this file"))
+        signals.append(Signal(name: "churn", risk: churnRisk, weight: weights.churn, detail: "\(Self.counted(churn, "recent commit")) touched this file"))
 
         // Coupling anomaly: a strong historical partner is absent from the change.
         if let partner = history.topPartner(file.path), partner.count >= 4, !changedPaths.contains(partner.partner) {
@@ -147,7 +151,7 @@ public struct RiskEngine: Sendable {
 
         // Diff shape: large single-file edits are harder to review.
         let diffRisk = file.isBinary ? 0.2 : min(1, Double(file.churnLines) / 400)
-        signals.append(Signal(name: "diff-shape", risk: diffRisk, weight: weights.diffShape, detail: "\(file.churnLines) lines touched"))
+        signals.append(Signal(name: "diff-shape", risk: diffRisk, weight: weights.diffShape, detail: "\(Self.counted(file.churnLines, "line")) touched"))
 
         // Ownership: U-shaped — both diffuse ownership and bus-factor are risky.
         let authors = history.authorCount(file.path)
@@ -225,6 +229,12 @@ public struct RiskEngine: Sendable {
     }
 
     // MARK: - Math
+
+    /// `1 line`, `2 lines` — count + correctly pluralized noun (pluralizes the
+    /// last word of a multi-word noun, e.g. `1 recent commit`).
+    static func counted(_ value: Int, _ noun: String) -> String {
+        "\(value) \(noun)\(value == 1 ? "" : "s")"
+    }
 
     static func weightedScore(_ signals: [Signal]) -> Double {
         let totalWeight = signals.reduce(0) { $0 + $1.weight }

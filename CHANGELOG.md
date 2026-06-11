@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Untracked (never-`git add`ed) files are now included in working-tree assessments as fully-added files, so a brand-new file can no longer score zero risk by being invisible to `augur check`
+- Unknown/typo'd `.augur.toml` keys are now a hard error naming the offending key path and its valid siblings (a typo'd `[[sensitivity.rules]]` used to be silently ignored, failing open)
+- A coverage file that parses to zero records is rejected instead of "loading" silently; a missing coverage file now says it does not exist instead of "could not detect format" (auto-detected files warn and fall back)
+- The test-gap signal no longer fires on documentation files (`.md`, `.rst`, `.txt`, `LICENSE`, ...), so docs-only changes can score near zero
+- Failing git invocations now include git's own stderr message (e.g. `fatal: ambiguous argument ...`), and malformed `.augur.toml` decode errors render as human-readable key-path messages instead of raw Swift `DecodingError` dumps
+- Conflicting scope flags (`--staged` with `--range`) are now a usage error (exit 64) instead of silently preferring the range
+- An invalid `gate --threshold` value now prints gate's own usage instead of the generic root usage
+- Pluralization: "1 incident / 1 commit" (and "1 line touched") instead of "1 incidents / 1 commits"
+
 ## [v0.3.1] - 2026-06-10
 
 ### Other
