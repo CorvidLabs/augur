@@ -174,10 +174,16 @@ jobs:
     # checksum → assess → gate. The other jobs run augur via `.build/release`
     # directly, so action.yml's wiring (binary install, sha verification, the
     # injection-safe env handling, version resolution) is otherwise untested.
-    # macOS is used on purpose: it has a Swift toolchain, so the action's
-    # source-build fallback works even when a prebuilt binary is unavailable —
-    # the smoke test never flakes on release-asset timing.
-    runs-on: macos-latest
+    # Run on BOTH hosted runners. macOS has a Swift toolchain so the source-build
+    # fallback always works; ubuntu-latest has none, so it exercises the prebuilt
+    # Linux download path -- the path that shipped a dynamically-linked binary
+    # failing at runtime with a missing libswiftCore.so. A macOS-only smoke can't
+    # catch that. (The ubuntu leg relies on the latest release's Linux asset.)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
