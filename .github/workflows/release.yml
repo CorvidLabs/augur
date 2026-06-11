@@ -138,6 +138,9 @@ jobs:
       - name: Upload binary + sidecar to release
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job has no checkout, so `gh` can't infer the repo from git.
+          # GH_REPO targets it explicitly for every `gh release` subcommand.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
