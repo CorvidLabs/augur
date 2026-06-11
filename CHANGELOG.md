@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [v0.4.0] - 2026-06-11
+
+### Changed
+
+- `AugurError.git` now carries the failing command, exit status, and git's stderr (`case git(command:status:stderr:)`); source-breaking for `AugurKit` consumers that match on it
 
 ### Fixed
 
@@ -12,6 +16,15 @@
 - Conflicting scope flags (`--staged` with `--range`) are now a usage error (exit 64) instead of silently preferring the range
 - An invalid `gate --threshold` value now prints gate's own usage instead of the generic root usage
 - Pluralization: "1 incident / 1 commit" (and "1 line touched") instead of "1 incidents / 1 commits"
+
+## [v0.3.2] - 2026-06-10
+
+### Other
+
+- CI hardening: guard major-lookup jq + block self-hosted runners (#31) (9004aeb)
+- Fix: statically link the Linux release binary (--static-swift-stdlib) (#29) (e4f8c75)
+- Add: CI Linux packaging smoke + restrict Release to dotted version tags (#30) (bf55e18)
+- Add: CI smoke-test that dogfoods the composite action (1e1953d)
 
 ## [v0.3.1] - 2026-06-10
 
