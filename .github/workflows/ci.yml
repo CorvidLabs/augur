@@ -228,9 +228,15 @@ jobs:
       - name: Build and package the Linux binary (no upload)
         run: |
           set -euo pipefail
-          swift build -c release
-          cp "$(swift build -c release --show-bin-path)/augur" augur-linux-x86_64
+          # Match release.yml: statically link the Swift runtime so the binary
+          # runs on a bare ubuntu-latest runner (no Swift toolchain). This job
+          # runs INSIDE swift:6.0 (runtime present), so --version alone can't
+          # catch a dynamic link -- the ldd guard below is what actually does.
+          swift build -c release --static-swift-stdlib
+          cp "$(swift build -c release --static-swift-stdlib --show-bin-path)/augur" augur-linux-x86_64
           file augur-linux-x86_64 || true
+          ldd augur-linux-x86_64 2>/dev/null | grep -i swift && \
+            { echo "::error::binary still dynamically links the Swift runtime"; exit 1; } || true
           sha256sum augur-linux-x86_64 | cut -d' ' -f1 > augur-linux-x86_64.sha256
           cat augur-linux-x86_64.sha256
           test -x augur-linux-x86_64
