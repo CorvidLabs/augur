@@ -1,93 +1,220 @@
+/* ============================================================
+   augur site — built on the CorvidLabs design system.
+   Tokens are vendored at /brand/tokens.css (imported globally in
+   BaseLayout). This file maps augur's legacy variable names onto the
+   brand tokens so every component themes for free, in light AND dark.
+   No purple. Square corners. WCAG AA both modes.
+   ============================================================ */
+
 :root {
-  --bg: #0d0a1a;
-  --bg-raised: #161226;
-  --bg-raised-2: #1d1733;
-  --border: #2a2342;
-  --border-strong: #3b3158;
-  --text: #f3f0fa;
-  --text-muted: #c4bdd9;
-  --text-dim: #968cb3;
-  --accent: #8b5cf6;
-  --accent-bright: #c4b5fd;
-  --accent-deep: #5b21b6;
-  --accent-muted: rgba(139, 92, 246, 0.10);
-  --accent-glow: rgba(139, 92, 246, 0.20);
-  --focus: #c4b5fd;
-  --radius: 10px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --serif: "Iowan Old Style", "Apple Garamond", "Baskerville", Georgia, serif;
-  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  /* Verdict colors: the proceed/review/block traffic light. */
-  --proceed: #34d399;
-  --proceed-muted: rgba(52, 211, 153, 0.10);
-  --review: #fbbf24;
-  --review-muted: rgba(251, 191, 36, 0.10);
-  --block: #f87171;
-  --block-muted: rgba(248, 113, 113, 0.10);
-  /* Terminal-mockup cyan: mirrors the CLI's ANSI cyan (paths, confidence). */
-  --term-cyan: #5eead4;
+  /* Surfaces — alias legacy names onto brand tokens */
+  --bg: var(--paper);
+  --bg-raised: var(--surface);
+  --bg-raised-2: var(--surface-strong);
+  --border: var(--hairline);
+  --border-strong: var(--ink-45);
+
+  /* Text */
+  --text: var(--ink);
+  --text-muted: var(--ink-70);
+  --text-dim: var(--ink-45);
+
+  /* Accent — corvid sheen, never purple */
+  --accent: var(--sheen);
+  --accent-bright: var(--sheen-strong);
+  --accent-deep: var(--sheen-strong);
+  --accent-muted: var(--ink-06);
+  --accent-glow: transparent;
+  --focus: var(--sheen);
+
+  /* Square corners */
+  --radius: 0px;
+
+  /* Type — brand fonts */
+  --font: var(--font-display);
+  --serif: var(--font-display);
+  --mono: var(--font-mono);
+
+  /* Verdict traffic light → semantic state tokens.
+     Muted backgrounds use the low-alpha ink so they read in both modes. */
+  --proceed: var(--success);
+  --proceed-muted: var(--ink-06);
+  --review: var(--warning);
+  --review-muted: var(--ink-06);
+  --block: var(--danger);
+  --block-muted: var(--ink-06);
+
+  /* Terminal "cyan" (CLI paths / confidence) → the function syntax token. */
+  --term-cyan: var(--code-function);
+
   --tap: 44px;
   --max-w: 1180px;
   --container-pad: 32px;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+/* On ink (dark) surfaces, accent-bright should glint, not deepen. */
+:root[data-theme="dark"] {
+  --accent-bright: var(--sheen-bright);
+  --accent-deep: var(--sheen);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent-bright: var(--sheen-bright);
+    --accent-deep: var(--sheen);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+}
 body {
-  background: var(--bg); color: var(--text);
-  font-family: var(--font); font-size: 1rem; line-height: 1.6;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
-ul, ol { list-style: none; }
-a { color: inherit; text-decoration: none; }
-img, svg { display: block; max-width: 100%; }
-button { font-family: inherit; cursor: pointer; }
-pre, code { max-width: 100%; }
-pre { overflow-x: auto; max-width: 100%; box-sizing: border-box; }
-pre code { white-space: pre; word-break: normal; word-wrap: normal; }
+ul,
+ol {
+  list-style: none;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+pre,
+code {
+  max-width: 100%;
+}
+pre {
+  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+pre code {
+  white-space: pre;
+  word-break: normal;
+  word-wrap: normal;
+}
 
 /* Shiki / astro syntax-highlighted blocks */
-pre.astro-code { max-width: 100%; box-sizing: border-box; overflow-x: auto; contain: layout; }
+pre.astro-code {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  contain: layout;
+}
+
+/* Map Shiki's css-variables theme onto the CorvidLabs --code-* tokens so
+   syntax highlighting recolors with the page in both light and dark. */
+:root {
+  --astro-code-color-text: var(--ink);
+  --astro-code-color-background: transparent;
+  --astro-code-token-constant: var(--code-number);
+  --astro-code-token-string: var(--code-string);
+  --astro-code-token-comment: var(--code-comment);
+  --astro-code-token-keyword: var(--code-keyword);
+  --astro-code-token-parameter: var(--ink-70);
+  --astro-code-token-function: var(--code-function);
+  --astro-code-token-string-expression: var(--code-string);
+  --astro-code-token-punctuation: var(--ink-70);
+  --astro-code-token-link: var(--sheen);
+}
 
 /* Responsive tables */
-table { max-width: 100%; box-sizing: border-box; }
-.doc-body table, .art-body table {
+table {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.doc-body table,
+.art-body table {
   display: block;
   overflow-x: auto;
   max-width: 100%;
   box-sizing: border-box;
 }
 
-.container { max-width: var(--max-w); margin: 0 auto; padding: 0 var(--container-pad); box-sizing: border-box; }
-
-@media (max-width: 480px) {
-  :root { --container-pad: 16px; }
+.container {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--container-pad);
+  box-sizing: border-box;
 }
 
-a:focus-visible, button:focus-visible, input:focus-visible,
-select:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid var(--focus);
+@media (max-width: 480px) {
+  :root {
+    --container-pad: 16px;
+  }
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--sheen);
   outline-offset: 3px;
-  border-radius: 4px;
 }
 
 .skip-link {
-  position: absolute; top: -100px; left: 8px;
-  background: var(--accent); color: #0f0a1e;
-  padding: 12px 18px; border-radius: 8px;
-  font-weight: 600; text-decoration: none; z-index: 100;
-  transition: top .15s;
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  background: var(--sheen);
+  color: var(--paper);
+  padding: 12px 18px;
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 100;
+  transition: top 0.15s;
 }
-.skip-link:focus { top: 8px; }
+.skip-link:focus {
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 .sr-only {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Touch / coarse pointer: enforce minimum 44px tap targets */
 @media (pointer: coarse) {
-  a, button {
+  a,
+  button {
     min-height: 44px;
   }
   a.skip-link {

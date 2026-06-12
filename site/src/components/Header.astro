@@ -1,50 +1,119 @@
 ---
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import Button from './Button.astro'
-import { base } from '../lib/path'
-const current = Astro.url.pathname.replace(/\/$/, '') || base.replace(/\/$/, '')
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import Button from "./Button.astro";
+import { base } from "../lib/path";
+const current =
+  Astro.url.pathname.replace(/\/$/, "") || base.replace(/\/$/, "");
 // Single source of truth: read the released version from the workspace CHANGELOG
 // at build time so the badge never drifts behind a release. (augur is a Swift
 // package, so the version lives in the changelog, not a Cargo.toml.)
 const changelog = fs.readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../CHANGELOG.md'),
-  'utf-8',
-)
-const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? '0.0.0'}`
+  path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../CHANGELOG.md",
+  ),
+  "utf-8",
+);
+const VERSION = `v${changelog.match(/##\s*\[v?([0-9][^\]\s]*)\]/)?.[1] ?? "0.0.0"}`;
 const links = [
-  { href: `${base}docs`, label: 'Docs' },
-  { href: `${base}docs/signals`, label: 'Signals' },
-  { href: `${base}docs/ci-integration`, label: 'CI' },
-]
-const isActive = (href: string) => current === href.replace(/\/$/, '')
+  { href: `${base}docs`, label: "Docs" },
+  { href: `${base}docs/signals`, label: "Signals" },
+  { href: `${base}docs/ci-integration`, label: "CI" },
+];
+const isActive = (href: string) => current === href.replace(/\/$/, "");
 ---
+
 <header class="site-header" role="banner">
   <div class="nav-inner">
     <a href={base} class="nav-logo" aria-label="augur home">
-      <span class="glyph" aria-hidden="true">a</span>
+      <svg
+        class="nav-mark"
+        viewBox="0 0 64 64"
+        aria-hidden="true"
+        width="28"
+        height="28"
+      >
+        <circle cx="24" cy="32" r="18" fill="currentColor"></circle>
+        <path d="M33 21.5 L58.5 29.5 L33 39.5 Z" fill="currentColor"></path>
+        <circle cx="27.5" cy="26" r="3" fill="var(--paper)"></circle>
+      </svg>
       <span>augur</span>
       <span class="nav-version">{VERSION}</span>
     </a>
     <nav aria-label="Primary">
       <ul class="nav-links" id="nav-links">
-        {links.map(l => (
-          <li>
-            <a href={l.href} class={isActive(l.href) ? 'active' : ''}
-               aria-current={isActive(l.href) ? 'page' : undefined}>{l.label}</a>
-          </li>
-        ))}
+        {
+          links.map((l) => (
+            <li>
+              <a
+                href={l.href}
+                class={isActive(l.href) ? "active" : ""}
+                aria-current={isActive(l.href) ? "page" : undefined}
+              >
+                {l.label}
+              </a>
+            </li>
+          ))
+        }
       </ul>
     </nav>
     <div class="nav-cta">
-      <a href="https://github.com/CorvidLabs/augur" class="btn btn-ghost"
-         aria-label="View on GitHub (opens in new tab)" target="_blank" rel="noopener noreferrer">
+      <a
+        href="https://github.com/CorvidLabs/augur"
+        class="btn btn-ghost"
+        aria-label="View on GitHub (opens in new tab)"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         GitHub <span aria-hidden="true">↗</span>
       </a>
       <Button href={`${base}docs/quickstart`} variant="primary">Install</Button>
     </div>
-    <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav-links">
+    <button
+      type="button"
+      class="corvid-theme-toggle"
+      data-corvid-theme-toggle
+      aria-pressed="false"
+      aria-label="Switch to dark theme"
+      title="Switch theme"
+    >
+      <svg
+        class="sun"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="4.2"></circle>
+        <path
+          d="M12 2.6v2.4M12 19v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.6 12h2.4M19 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"
+        ></path>
+      </svg>
+      <svg
+        class="moon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12.8A8.6 8.6 0 1 1 11.2 3a6.7 6.7 0 0 0 9.8 9.8z"></path>
+      </svg>
+    </button>
+    <button
+      class="nav-hamburger"
+      id="nav-hamburger"
+      aria-label="Toggle menu"
+      aria-expanded="false"
+      aria-controls="nav-links"
+    >
       <span class="ham-bar"></span>
       <span class="ham-bar"></span>
       <span class="ham-bar"></span>
@@ -53,57 +122,180 @@ const isActive = (href: string) => current === href.replace(/\/$/, '')
 </header>
 
 <script>
-  const btn = document.getElementById('nav-hamburger')
-  const nav = document.getElementById('nav-links')
+  const btn = document.getElementById("nav-hamburger");
+  const nav = document.getElementById("nav-links");
   if (btn && nav) {
-    btn.addEventListener('click', () => {
-      const expanded = btn.getAttribute('aria-expanded') === 'true'
-      btn.setAttribute('aria-expanded', String(!expanded))
-      nav.classList.toggle('nav-open', !expanded)
-    })
+    btn.addEventListener("click", () => {
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!expanded));
+      nav.classList.toggle("nav-open", !expanded);
+    });
     // Close menu when a link is tapped
-    nav.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).tagName === 'A') {
-        btn.setAttribute('aria-expanded', 'false')
-        nav.classList.remove('nav-open')
+    nav.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).tagName === "A") {
+        btn.setAttribute("aria-expanded", "false");
+        nav.classList.remove("nav-open");
       }
-    })
+    });
   }
 </script>
 
 <style is:global>
-  .site-header { border-bottom: 1px solid var(--border); position: sticky; top: 0;
-    background: rgba(13,10,26,.85); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); z-index: 10; }
-  .nav-inner { display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 32px; max-width: 1180px; margin: 0 auto; gap: 16px; }
-  .nav-logo { display: flex; align-items: center; gap: 10px;
-    font-weight: 600; font-size: 1.0625rem; text-decoration: none;
-    color: var(--text); letter-spacing: -0.01em; min-height: 44px; }
-  .nav-logo .glyph { width: 28px; height: 28px; border-radius: 7px;
-    background: linear-gradient(135deg, var(--accent-bright), var(--accent) 60%, var(--accent-deep));
-    display: grid; place-items: center; color: #0f0a1e; font-weight: 800;
-    font-size: 0.875rem; box-shadow: 0 0 20px var(--accent-glow); }
-  .nav-version { color: var(--text-dim); font-size: 0.875rem; font-family: var(--mono); }
-  .nav-links { display: flex; gap: 4px; }
-  .nav-links a { color: var(--text-muted); text-decoration: none;
-    font-size: 0.9375rem; padding: 10px 14px; border-radius: 6px;
-    min-height: 44px; display: inline-flex; align-items: center; }
-  .nav-links a:hover { color: var(--accent-bright); background: rgba(255,255,255,0.03); }
-  .nav-links a.active { color: var(--accent-bright); background: var(--accent-muted); }
-  .nav-cta { display: flex; gap: 8px; align-items: center; }
+  .site-header {
+    border-bottom: 1px solid var(--hairline);
+    position: sticky;
+    top: 0;
+    background: var(--header-bg);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    z-index: 10;
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    max-width: 1180px;
+    margin: 0 auto;
+    gap: 16px;
+  }
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    text-decoration: none;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    min-height: 44px;
+  }
+  .nav-logo .nav-mark {
+    width: 28px;
+    height: 28px;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .nav-version {
+    color: var(--ink-45);
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+  }
+  .nav-links {
+    display: flex;
+    gap: 4px;
+  }
+  .nav-links a {
+    color: var(--ink-70);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    padding: 10px 14px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .nav-links a:hover {
+    color: var(--sheen);
+    background: var(--ink-06);
+  }
+  .nav-links a.active {
+    color: var(--sheen);
+    background: var(--ink-06);
+  }
+  .nav-cta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* Standard CorvidLabs sun/moon theme toggle. */
+  .corvid-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--ink-12);
+    color: var(--ink-70);
+    cursor: pointer;
+    transition:
+      border-color 0.2s,
+      color 0.2s;
+    flex-shrink: 0;
+  }
+  .corvid-theme-toggle:hover {
+    border-color: var(--sheen);
+    color: var(--sheen);
+  }
+  .corvid-theme-toggle:focus-visible {
+    outline: 2px solid var(--sheen);
+    outline-offset: 2px;
+  }
+  .corvid-theme-toggle svg {
+    width: 17px;
+    height: 17px;
+  }
+  .corvid-theme-toggle .moon {
+    display: none;
+  }
+  :root[data-theme="dark"] .corvid-theme-toggle .sun {
+    display: none;
+  }
+  :root[data-theme="dark"] .corvid-theme-toggle .moon {
+    display: inline;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .corvid-theme-toggle .sun {
+      display: none;
+    }
+    :root:not([data-theme="light"]) .corvid-theme-toggle .moon {
+      display: inline;
+    }
+  }
+  :root[data-theme="light"] .corvid-theme-toggle .sun {
+    display: inline;
+  }
+  :root[data-theme="light"] .corvid-theme-toggle .moon {
+    display: none;
+  }
 
   /* Hamburger button, hidden on desktop */
-  .nav-hamburger { display: none; flex-direction: column; justify-content: center;
-    gap: 5px; background: none; border: 1px solid var(--border); border-radius: 6px;
-    padding: 8px 10px; cursor: pointer; min-height: 44px; min-width: 44px;
-    color: var(--accent-bright); }
-  .nav-hamburger:hover { border-color: var(--accent-bright); background: var(--accent-muted); }
-  .ham-bar { display: block; width: 18px; height: 2px; background: var(--accent-bright);
-    border-radius: 2px; transition: opacity .15s, transform .15s; }
+  .nav-hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: 1px solid var(--ink-12);
+    padding: 8px 10px;
+    cursor: pointer;
+    min-height: 44px;
+    min-width: 44px;
+    color: var(--ink-70);
+  }
+  .nav-hamburger:hover {
+    border-color: var(--sheen);
+    color: var(--sheen);
+  }
+  .ham-bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+    transition:
+      opacity 0.15s,
+      transform 0.15s;
+  }
 
   @media (max-width: 768px) {
-    .nav-hamburger { display: flex; }
-    .nav-links { display: none; }
+    .nav-hamburger {
+      display: flex;
+    }
+    .nav-links {
+      display: none;
+    }
     .nav-links.nav-open {
       display: flex;
       flex-direction: column;
@@ -111,18 +303,21 @@ const isActive = (href: string) => current === href.replace(/\/$/, '')
       top: 100%;
       left: 0;
       right: 0;
-      background: rgba(13,10,26,.97);
-      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      border-bottom: 1px solid var(--hairline);
       padding: 12px 16px 20px;
       gap: 2px;
       z-index: 9;
     }
     .nav-links.nav-open a {
       padding: 12px 16px;
-      border-radius: 6px;
       font-size: 1rem;
     }
-    .nav-inner { padding: 12px 16px; }
-    .nav-cta { display: none; }
+    .nav-inner {
+      padding: 12px 16px;
+    }
+    .nav-cta {
+      display: none;
+    }
   }
 </style>

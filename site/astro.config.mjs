@@ -22,8 +22,10 @@ export default defineConfig({
   markdown: {
     remarkPlugins: [rewriteMdLinks],
     shikiConfig: {
-      // github-dark-high-contrast passes WCAG AA for all token colors.
-      theme: 'github-dark-high-contrast',
+      // The css-variables theme emits --shiki-* custom properties instead of
+      // baked-in hex, so code blocks recolor with the CorvidLabs --code-*
+      // tokens and follow light/dark automatically. Mapping lives in globals.css.
+      theme: 'css-variables',
     },
   },
 })

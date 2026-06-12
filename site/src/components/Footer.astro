@@ -1,13 +1,32 @@
 ---
-import { base } from '../lib/path'
+import { base } from "../lib/path";
 ---
+
 <footer role="contentinfo">
   <div class="container">
     <div class="foot-grid">
       <div class="foot-brand">
-        <p class="logo"><span aria-hidden="true">🔮</span> augur</p>
-        <p class="foot-tagline">Graded trust for code changes. A deterministic risk verdict (proceed, review, or block) for humans and AI agents. No API key, no LLM.</p>
-        <p class="foot-tagline">A <a href="https://corvidlabs.xyz">CorvidLabs</a> project.</p>
+        <p class="logo">
+          <svg
+            class="foot-mark"
+            viewBox="0 0 64 64"
+            aria-hidden="true"
+            width="22"
+            height="22"
+          >
+            <circle cx="24" cy="32" r="18" fill="currentColor"></circle>
+            <path d="M33 21.5 L58.5 29.5 L33 39.5 Z" fill="currentColor"></path>
+            <circle cx="27.5" cy="26" r="3" fill="var(--paper)"></circle>
+          </svg>
+          augur
+        </p>
+        <p class="foot-tagline">
+          Graded trust for code changes. A deterministic risk verdict (proceed,
+          review, or block) for humans and AI agents. No API key, no LLM.
+        </p>
+        <p class="foot-tagline">
+          A <a href="https://corvidlabs.xyz">CorvidLabs</a> project.
+        </p>
       </div>
       <div class="foot-col">
         <h3>Docs</h3>
@@ -22,13 +41,17 @@ import { base } from '../lib/path'
         <a href={`${base}docs/coverage`}>Coverage</a>
         <a href={`${base}docs/ci-integration`}>CI integration</a>
         <a href={`${base}docs/dogfooding`}>Dogfooding</a>
-        <a href="https://github.com/CorvidLabs/augur/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/CorvidLabs/augur/blob/main/CHANGELOG.md"
+          >Changelog</a
+        >
       </div>
       <div class="foot-col">
         <h3>Community</h3>
         <a href="https://github.com/CorvidLabs/augur">GitHub</a>
         <a href="https://github.com/CorvidLabs/attest">attest</a>
-        <a href="https://github.com/CorvidLabs/augur/blob/main/AGENTS.md">AGENTS.md</a>
+        <a href="https://github.com/CorvidLabs/augur/blob/main/AGENTS.md"
+          >AGENTS.md</a
+        >
       </div>
     </div>
     <div class="foot-bottom">
@@ -39,21 +62,76 @@ import { base } from '../lib/path'
 </footer>
 
 <style is:global>
-  footer { border-top: 1px solid var(--border); padding: 60px 0 30px;
-    color: var(--text-muted); font-size: 0.9375rem; }
-  .foot-grid { display: grid; grid-template-columns: 1.5fr repeat(3, 1fr);
-    gap: 40px; margin-bottom: 36px; }
-  .foot-brand { display: flex; flex-direction: column; gap: 12px; }
-  .foot-brand .logo { display: flex; align-items: center; gap: 8px;
-    color: var(--text); font-weight: 600; font-size: 1.0625rem; }
-  .foot-brand .foot-tagline { color: var(--text-muted); font-size: 0.9375rem; line-height: 1.5; }
-  .foot-brand .foot-tagline a { color: var(--accent-bright); display: inline-block; padding: 4px 0; }
-  .foot-brand .foot-tagline a:hover { text-decoration: underline; }
-  .foot-col h3 { color: var(--text); font-size: 0.9375rem; margin-bottom: 14px; font-weight: 600; }
-  .foot-col a { display: block; color: var(--text-muted); font-size: 0.9375rem; padding: 6px 0; }
-  .foot-col a:hover { color: var(--accent-bright); }
-  .foot-bottom { border-top: 1px solid var(--border); padding-top: 24px;
-    display: flex; justify-content: space-between; color: var(--text-dim);
-    font-size: 0.875rem; flex-wrap: wrap; gap: 12px; }
-  @media (max-width: 640px) { .foot-grid { grid-template-columns: 1fr; } }
+  footer {
+    border-top: 1px solid var(--hairline);
+    padding: 60px 0 30px;
+    color: var(--ink-70);
+    font-size: 0.9375rem;
+  }
+  .foot-grid {
+    display: grid;
+    grid-template-columns: 1.5fr repeat(3, 1fr);
+    gap: 40px;
+    margin-bottom: 36px;
+  }
+  .foot-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .foot-brand .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 1.0625rem;
+  }
+  .foot-brand .logo .foot-mark {
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .foot-brand .foot-tagline {
+    color: var(--ink-70);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+  .foot-brand .foot-tagline a {
+    color: var(--sheen);
+    display: inline-block;
+    padding: 4px 0;
+  }
+  .foot-brand .foot-tagline a:hover {
+    text-decoration: underline;
+  }
+  .foot-col h3 {
+    color: var(--ink);
+    font-size: 0.9375rem;
+    margin-bottom: 14px;
+    font-weight: 700;
+  }
+  .foot-col a {
+    display: block;
+    color: var(--ink-70);
+    font-size: 0.9375rem;
+    padding: 6px 0;
+  }
+  .foot-col a:hover {
+    color: var(--sheen);
+  }
+  .foot-bottom {
+    border-top: 1px solid var(--hairline);
+    padding-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--ink-45);
+    font-size: 0.875rem;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  @media (max-width: 640px) {
+    .foot-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
