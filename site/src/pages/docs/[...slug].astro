@@ -1,17 +1,17 @@
 ---
 import { getCollection } from 'astro:content'
-import DocsLayout from '../../layouts/DocsLayout.astro'
+import RedirectLayout from '../../layouts/RedirectLayout.astro'
+import { HUB_DOCS } from '../../lib/hub'
 
 export async function getStaticPaths() {
   const entries = await getCollection('docs')
   return entries
     .filter(e => e.slug !== 'index')
-    .map(entry => ({ params: { slug: entry.slug }, props: { entry } }))
+    .map(entry => ({ params: { slug: entry.slug }, props: { slug: entry.slug } }))
 }
 
-const { entry } = Astro.props
-const { Content } = await entry.render()
+const { slug } = Astro.props
+// Preserve deep links: map each retired doc slug to its hub docs equivalent.
+const destination = `${HUB_DOCS}${slug}/`
 ---
-<DocsLayout title={entry.data.title} description={entry.data.description} section={entry.data.section}>
-  <Content />
-</DocsLayout>
+<RedirectLayout title="augur docs have moved to CorvidLabs" destination={destination} />
