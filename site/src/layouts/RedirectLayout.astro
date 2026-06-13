@@ -1,0 +1,57 @@
+---
+// Standalone redirect stub for the retired augur site. The marketing and docs
+// content now live on the CorvidLabs hub, so every route here meta-refreshes to
+// its hub equivalent and declares the hub URL as canonical. Kept dependency-free
+// (no Header/Footer/tokens) so it can't link back into the retired pages.
+interface Props {
+  title: string
+  destination: string
+}
+const { title, destination } = Astro.props
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content={`0; url=${destination}`} />
+  <link rel="canonical" href={destination} />
+  <meta name="robots" content="noindex, follow" />
+  <title>{title}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0c0c0f;
+      color: #e7e7ea;
+      text-align: center;
+      padding: 24px;
+    }
+    main { max-width: 32rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+    p { color: #a0a0a8; margin: 0 0 1.5rem; line-height: 1.5; }
+    a.moved {
+      display: inline-block;
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #0c0c0f;
+      background: #e7e7ea;
+      padding: 0.65rem 1.25rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+    }
+    a.moved:hover { background: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>This site has moved.</h1>
+    <p>The augur site now lives on the CorvidLabs hub. You're being redirected automatically.</p>
+    <a class="moved" href={destination}>This site has moved to CorvidLabs &rarr;</a>
+  </main>
+</body>
+</html>
