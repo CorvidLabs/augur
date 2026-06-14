@@ -42,8 +42,9 @@ jobs:
   build:
     name: Build Astro Site
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }   # Astro Header reads the version from CHANGELOG.md at build time
 
       - name: Setup Bun
@@ -66,6 +67,7 @@ jobs:
     name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
