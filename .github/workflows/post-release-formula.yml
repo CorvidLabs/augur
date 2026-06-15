@@ -1,13 +1,13 @@
 name: Post-Release Formula Update
 
-# Runs after the Release workflow finishes uploading the universal macOS binary
-# and its .sha256 sidecar. Pulls the real sha, rewrites the formula in
-# CorvidLabs/homebrew-tap with the new version + sha. This is the only correct
-# moment to bump the formula — before the release the new version's binary does
-# not exist yet, so any pre-build sha would be a lie.
+# Runs after the Release workflow finishes uploading the macOS and Linux
+# binaries and their .sha256 sidecars. Pulls the real shas, rewrites the
+# formula in CorvidLabs/homebrew-tap with the new version + shas. This is the
+# only correct moment to bump the formula — before the release the new version's
+# binaries do not exist yet, so any pre-build sha would be a lie.
 #
-# augur ships ONE universal binary, so the formula has a single sha256 (unlike
-# fledge's three). The rewrite below is anchored to that single line.
+# augur ships a macOS universal binary and a Linux x86_64 binary. Keep the
+# generated formula declarative so Homebrew can statically analyze each platform.
 #
 # Security note: every value derived from `github.event.workflow_run.*` (or any
 # other potentially attacker-controlled context) flows through an `env:` block
@@ -46,7 +46,7 @@ jobs:
             echo "version=${HEAD_BRANCH#v}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Fetch sha256 sidecar from release
+      - name: Fetch sha256 sidecars from release
         id: shas
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,18 +54,27 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          sha="$(gh release download "$TAG" -p "augur-macos-universal.sha256" -R "$REPO" -O - | awk '{print $1}')"
-          if ! [[ "$sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
-            echo "::error::Invalid sha256 from sidecar: '$sha'"
+          macos_sha="$(gh release download "$TAG" -p "augur-macos-universal.sha256" -R "$REPO" -O - | awk '{print $1}')"
+          linux_sha="$(gh release download "$TAG" -p "augur-linux-x86_64.sha256" -R "$REPO" -O - | awk '{print $1}')"
+          if ! [[ "$macos_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Invalid macOS sha256 from sidecar: '$macos_sha'"
             exit 1
           fi
-          echo "macos_universal=$sha" >> "$GITHUB_OUTPUT"
+          if ! [[ "$linux_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Invalid Linux sha256 from sidecar: '$linux_sha'"
+            exit 1
+          fi
+          {
+            echo "macos_universal=$macos_sha"
+            echo "linux_x86_64=$linux_sha"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Sync formula to homebrew-tap
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           NEW_VERSION: ${{ steps.tag.outputs.version }}
           MACOS_UNIVERSAL: ${{ steps.shas.outputs.macos_universal }}
+          LINUX_X86_64: ${{ steps.shas.outputs.linux_x86_64 }}
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
@@ -75,27 +84,58 @@ jobs:
           git clone "https://x-access-token:${GH_TOKEN}@github.com/CorvidLabs/homebrew-tap.git" /tmp/homebrew-tap
           cd /tmp/homebrew-tap
 
-          # Rewrite the formula in-place. Untrusted values arrive via env only,
-          # never via run-string interpolation.
+          # Rewrite the formula from a fixed template. Untrusted values arrive
+          # via env only, never via run-string interpolation.
           python3 - <<'PY'
-          import os, re, sys, pathlib
+          import os, pathlib, textwrap
+
+          version = os.environ["NEW_VERSION"]
+          macos_sha = os.environ["MACOS_UNIVERSAL"]
+          linux_sha = os.environ["LINUX_X86_64"]
           p = pathlib.Path("Formula/augur.rb")
-          src = p.read_text()
-          src, n_ver = re.subn(
-              r'(?m)^(\s*version\s+")(\d+\.\d+\.\d+)(")',
-              rf'\g<1>{os.environ["NEW_VERSION"]}\g<3>',
-              src,
-              count=1,
-          )
-          if n_ver != 1:
-              sys.exit("Expected exactly 1 version line in Formula/augur.rb")
-          parts = re.split(r'(sha256\s+"[0-9a-fA-F]{64}")', src)
-          if len(parts) - 1 != 2:
-              sys.exit(
-                  f"Expected 1 sha256 line in Formula/augur.rb, found {(len(parts) - 1) // 2}"
-              )
-          parts[1] = f'sha256 "{os.environ["MACOS_UNIVERSAL"]}"'
-          p.write_text("".join(parts))
+          p.write_text(textwrap.dedent(f'''\
+              class Augur < Formula
+                desc "Graded trust for code changes with deterministic risk scoring"
+                homepage "https://github.com/CorvidLabs/augur"
+                version "{version}"
+                license "MIT"
+
+                on_macos do
+                  on_arm do
+                    url "https://github.com/CorvidLabs/augur/releases/download/v#{{version}}/augur-macos-universal"
+                    sha256 "{macos_sha}"
+
+                    define_method(:install) do
+                      bin.install "augur-macos-universal" => "augur"
+                    end
+                  end
+
+                  on_intel do
+                    url "https://github.com/CorvidLabs/augur/releases/download/v#{{version}}/augur-macos-universal"
+                    sha256 "{macos_sha}"
+
+                    define_method(:install) do
+                      bin.install "augur-macos-universal" => "augur"
+                    end
+                  end
+                end
+
+                on_linux do
+                  on_intel do
+                    url "https://github.com/CorvidLabs/augur/releases/download/v#{{version}}/augur-linux-x86_64"
+                    sha256 "{linux_sha}"
+
+                    define_method(:install) do
+                      bin.install "augur-linux-x86_64" => "augur"
+                    end
+                  end
+                end
+
+                test do
+                  assert_match "{version}", shell_output("#{{bin}}/augur --version")
+                end
+              end
+              '''))
           PY
 
           git config user.name "github-actions[bot]"
