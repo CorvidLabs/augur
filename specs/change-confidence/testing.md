@@ -5,7 +5,8 @@
 The engine is tested through an in-memory `FixtureProbe` conforming to `RepositoryProbe`,
 so scoring is verified without invoking `git`. `now` is injected for determinism; no signal
 currently scores elapsed time. The real `GitRepository` is additionally exercised by on-disk
-integration tests (`GitRepositoryIntegrationTests`) against a temporary repository.
+integration tests (`GitRepositoryIntegrationTests`) against a temporary repository, including
+preflight rejection of GitHub's all-zero branch-creation sentinel range endpoints.
 
 ## Coverage (Tests/AugurKitTests/RiskEngineTests.swift)
 

@@ -192,6 +192,53 @@ final class GitRepositoryIntegrationTests: XCTestCase {
         }
     }
 
+    /// GitHub Actions uses an all-zero `before` SHA for newly-created branch
+    /// pushes; it is not a real commit, so Augur should reject it before `git diff`.
+    internal func testAllZeroRangeBaseIsRejectedBeforeGitDiff() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+
+        let probe = GitRepository(path: repo.path)
+        let sentinel = GitRepository.githubBranchCreationSentinel
+        XCTAssertThrowsError(try probe.changedFiles(in: .range("\(sentinel)..HEAD"))) { error in
+            Self.assertInvalidGitHubSentinelError(error, endpoint: sentinel)
+        }
+    }
+
+    /// The added-line path uses a separate `git diff --unified=0` command, so it
+    /// must share the same preflight range rejection as changed-file discovery.
+    internal func testAllZeroRangeHeadIsRejectedForAddedLinesToo() throws {
+        let repo = try TempGitRepo()
+        defer { repo.cleanup() }
+        try repo.write("a.go", "package main\n")
+        try repo.commit("init")
+
+        let probe = GitRepository(path: repo.path)
+        let sentinel = GitRepository.githubBranchCreationSentinel
+        XCTAssertThrowsError(try probe.addedLines(in: .range("HEAD...\(sentinel)"))) { error in
+            Self.assertInvalidGitHubSentinelError(error, endpoint: sentinel)
+        }
+    }
+
+    private static func assertInvalidGitHubSentinelError(
+        _ error: any Error,
+        endpoint: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case AugurError.invalidRange(let actualEndpoint) = error else {
+            return XCTFail("expected AugurError.invalidRange, got \(error)", file: file, line: line)
+        }
+        XCTAssertEqual(actualEndpoint, endpoint, file: file, line: line)
+        let description = (error as? LocalizedError)?.errorDescription ?? ""
+        XCTAssertTrue(description.contains("Invalid range: \(endpoint)"), description, file: file, line: line)
+        XCTAssertTrue(description.contains("GitHub's branch-creation sentinel"), description, file: file, line: line)
+        XCTAssertTrue(description.contains("origin/main..HEAD"), description, file: file, line: line)
+        XCTAssertTrue(description.contains("git merge-base origin/main HEAD"), description, file: file, line: line)
+    }
+
     // MARK: - Exclude matching
 
     /// A non-ASCII path must be matchable by an exclude glob (it was unreachable

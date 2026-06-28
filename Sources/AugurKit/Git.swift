@@ -1,8 +1,8 @@
 @preconcurrency import Foundation
 #if canImport(Glibc)
-import Glibc
+    import Glibc
 #elseif canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 
 // MARK: - Probe Protocol
@@ -45,6 +45,8 @@ extension RepositoryProbe {
 
 /// A `RepositoryProbe` backed by the `git` CLI.
 public struct GitRepository: RepositoryProbe {
+    internal static let githubBranchCreationSentinel = "0000000000000000000000000000000000000000"
+
     private let path: String
 
     public init(path: String = ".") {
@@ -139,12 +141,47 @@ public struct GitRepository: RepositoryProbe {
     }
 
     /// Maps a `DiffScope` to its `git diff` argument(s).
-    static func scopeArgs(_ scope: DiffScope) -> [String] {
+    internal static func scopeArgs(_ scope: DiffScope) throws -> [String] {
         switch scope {
-        case .range(let range): return [range]
+        case .range(let range):
+            try validateRange(range)
+            return [range]
         case .staged: return ["--cached"]
         case .workingTree: return ["HEAD"]
         }
+    }
+
+    /// Rejects GitHub's all-zero branch-creation sentinel before `git diff` sees it.
+    internal static func validateRange(_ range: String) throws {
+        guard let endpoint = sentinelEndpoint(in: range) else { return }
+        throw AugurError.invalidRange(endpoint: endpoint)
+    }
+
+    /// Returns the all-zero endpoint from common git range spellings, if present.
+    internal static func sentinelEndpoint(in range: String) -> String? {
+        let trimmed = range.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isGitHubBranchCreationSentinel(trimmed) { return trimmed }
+        if let delimiter = trimmed.range(of: "...") {
+            return sentinelEndpoint(leftOf: delimiter, in: trimmed) ?? sentinelEndpoint(rightOf: delimiter, in: trimmed)
+        }
+        if let delimiter = trimmed.range(of: "..") {
+            return sentinelEndpoint(leftOf: delimiter, in: trimmed) ?? sentinelEndpoint(rightOf: delimiter, in: trimmed)
+        }
+        return nil
+    }
+
+    private static func sentinelEndpoint(leftOf delimiter: Range<String.Index>, in range: String) -> String? {
+        let endpoint = String(range[..<delimiter.lowerBound])
+        return isGitHubBranchCreationSentinel(endpoint) ? endpoint : nil
+    }
+
+    private static func sentinelEndpoint(rightOf delimiter: Range<String.Index>, in range: String) -> String? {
+        let endpoint = String(range[delimiter.upperBound...])
+        return isGitHubBranchCreationSentinel(endpoint) ? endpoint : nil
+    }
+
+    private static func isGitHubBranchCreationSentinel(_ value: String) -> Bool {
+        value == githubBranchCreationSentinel
     }
 
     public func recentCommits(limit: Int) throws -> [Commit] {

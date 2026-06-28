@@ -3,11 +3,11 @@
 `augur` is deterministic and needs no API key, so it slots cleanly into CI and
 agent loops. Use `augur gate` to fail a job when a verdict crosses a threshold.
 
-> **Scope.** Everything here is **macOS-only** and runs on CorvidLabs'
-> self-hosted **macOS ARM64** runners (`runs-on: [self-hosted, macOS]`). The
-> composite actions and reusable workflows build augur (and attest) *from a
-> checkout*. There is no published binary yet, and cross-repo tool packaging is
-> a deliberately deferred later step.
+> **Scope.** The composite action can run on GitHub-hosted macOS and Linux x86_64
+> runners using the published augur binaries. Some examples still show CorvidLabs'
+> self-hosted **macOS ARM64** runners because augur's own CI uses them for release,
+> Pages, and trust-pipeline jobs. The `attest` trust workflow still builds from a
+> checkout until cross-repo attest packaging lands.
 
 ## The one-liner
 
@@ -79,8 +79,8 @@ default `GITHUB_TOKEN`, which is sufficient given `statuses: write`.
 
 `augur check --markdown` renders a deterministic GitHub-flavored markdown report
 for the assessed range: a verdict heading (`### augur: ⚠️ REVIEW - risk 58/100`,
-emoji per verdict: `proceed → ✅`, `review → ⚠️`, `block → ⛔`), a
-confidence/calibration line, a riskiest-first per-file table
+emoji per verdict: `proceed → ✅`, `review → ⚠️`, `block → ⛔`), a derived
+confidence (`100 - risk`) plus calibration line, a riskiest-first per-file table
 (`| File | Risk | Verdict | Top signal |`, capped at 25 rows with an "and N more"
 line), and a trailing hidden marker comment `<!-- augur-report -->` on its own
 line. It is mutually exclusive with `--json` and `--sarif`.
@@ -205,7 +205,7 @@ attest verify --policy .attest.json                     # gate on it
 ```
 
 `attest sign --from-augur -` copies augur's `verdict` and maps its `riskScore`
-(0...100) to `confidence = 1 − riskScore/100`. A worked, end-to-end run is in
+(0...100) to a trust-record confidence (`1 − riskScore/100`). A worked, end-to-end run is in
 [`examples/06-trust-pipeline.sh`](../examples/06-trust-pipeline.sh): an agent
 attests a `review` change, a policy demanding human approval for `review`+
 verdicts FAILs, then a human signs off and it PASSes. The policy clears as soon
