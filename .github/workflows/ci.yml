@@ -1,7 +1,36 @@
 name: CI
+
+# Path-scoped so a docs/README/LICENSE-only change triggers nothing: the build,
+# test, spec, and dogfood steps only run when the Swift sources, the package
+# manifest, the action wiring, the specs, or this workflow itself change.
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'action.yml'
+      - 'specs/**'
+      - 'fledge.toml'
+      - '.github/workflows/ci.yml'
   pull_request:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'action.yml'
+      - 'specs/**'
+      - 'fledge.toml'
+      - '.github/workflows/ci.yml'
+
+# Cancel an in-flight CI run for the same ref when a newer commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 # Run the bundled Node-20 JavaScript actions (e.g. actions/checkout) on Node 24 to
 # silence GitHub's Node-20 end-of-life deprecation warnings.
@@ -15,6 +44,7 @@ jobs:
     # macOS is the authoritative gate: full build, test, spec, and the dogfood
     # steps (which post commit statuses / PR comments) run here.
     runs-on: macos-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       # `statuses: write` lets the dogfood step post augur's verdict as a commit
@@ -24,7 +54,7 @@ jobs:
       # comment carrying the per-file risk table.
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install fledge
         run: brew install corvidlabs/tap/fledge
       - run: swift build
@@ -161,7 +191,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # The repo is checked out by a different user than the container runs as,
       # so mark it safe before any git command the tests invoke.
       - name: Mark workspace safe for git
@@ -184,10 +214,11 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # the action's range needs history
       - name: Run the bundled action against this checkout
@@ -228,7 +259,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Mark workspace safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build and package the Linux binary (no upload)
@@ -255,10 +286,11 @@ jobs:
     # multi-line list form; `#` comments (which legitimately mention the policy)
     # are stripped before matching.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Assert no workflow uses a self-hosted runner
         run: |
           set -euo pipefail
