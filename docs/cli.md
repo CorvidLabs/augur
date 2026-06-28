@@ -54,8 +54,28 @@ augur check --exclude 'vendor/**'    # drop paths from the assessment (repeatabl
 | `--no-codeowners` | Disable CODEOWNERS discovery (the `codeowners` signal stays neutral). |
 | `--config <path>` | Use an explicit `.augur.toml`. |
 | `--no-config` | Ignore any `.augur.toml`. |
+| `--color <mode>` | `auto` (default), `always`, or `never`. See [Color output](#color-output). |
 
 `check` always exits `0` (it reports; it does not gate). Use `gate` for CI.
+
+### Color output
+
+The human-readable `check` report is colored by meaning: verdicts and per-file
+markers are tinted by level, the risk meter uses `█`/`░` blocks, file paths are
+cyan, and secondary detail is dimmed.
+
+`--color` controls the human-readable `check` report:
+
+| Mode | Behavior |
+|------|----------|
+| `auto` *(default)* | Color only when stdout is an interactive TTY. |
+| `always` | Force color even when piped or redirected. |
+| `never` | Never emit ANSI codes. |
+
+In `auto`, `augur` also honors the [`NO_COLOR`](https://no-color.org) convention:
+if `NO_COLOR` is set in the environment, color is disabled. `--json`,
+`--markdown`, and `--sarif` output is always plain regardless of `--color`, so
+machine-readable streams never carry escape codes.
 
 ## gate
 

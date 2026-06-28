@@ -20,7 +20,7 @@ Type "# augur: is this change safe, or should a human look?"
 Sleep 700ms
 Enter
 Sleep 300ms
-Type "augur check"
+Type "augur check --color always"
 Sleep 500ms
 Enter
 Sleep 5s
