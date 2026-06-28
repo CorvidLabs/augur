@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.4.1] - 2026-06-28
+
+### Fixes
+
+- publish linux homebrew formula updates (#39) (7f9e9a3)
+
+### Other
+
+- Update: bump CLI version to 0.4.1 (0ff39ce)
+- Update CLI demo GIF (#42) (f6e5476)
+- Fix all-zero GitHub push range diagnostic (#41) (f06b8e9)
+- Update: standardize GitHub Actions (path filters, concurrency, runners) (#37) (6c40129)
+- Update hub.ts (#36) (38e85d5)
+- Retire: redirect the standalone augur site to the CorvidLabs hub (#35) (7e093f8)
+
 ## [v0.4.0] - 2026-06-11
 
 ### Changed
