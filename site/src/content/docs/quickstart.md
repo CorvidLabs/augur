@@ -6,8 +6,8 @@ order: 1
 ---
 
 Get `augur` running on your project in under a minute. `augur` needs no API key,
-no LLM, and no configuration to start, just Swift 6 and `git` on `PATH`. It is
-Runs on macOS and Linux.
+no LLM, and no configuration to start, just Swift 6 and `git` on `PATH`. It runs
+on macOS and Linux.
 
 ---
 
@@ -82,6 +82,11 @@ Color is **TTY-aware**: `augur` emits plain text (exactly as shown above) whenev
 stdout is not a terminal, so piped, redirected, `--json`, and `--sarif` output
 stays clean and scriptable. Control it with `--color auto|always|never` (default
 `auto`), and `augur` honors the [`NO_COLOR`](https://no-color.org) convention.
+
+The displayed `confidence` line is the inverse of risk (`100 - riskScore`) for
+human readability. The engine still gates on `riskScore` and `verdict`; the
+separate `calibration.confidence` value is only the history-backing factor for
+the incident signal.
 
 `check` always exits `0`: it reports, it does not gate.
 

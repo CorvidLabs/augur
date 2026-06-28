@@ -77,6 +77,11 @@ Every `Assessment` reports a `Calibration` (`confidence`, `totalCommits`,
 `incidentCommits`, and a `band`: `prior-only` → `weak` → `history-backed`) so a
 consumer knows whether a score is "guessing" or "grounded".
 
+The engine's primary output is risk. `Assessment.confidence` and
+`FileAssessment.confidence` are convenience mirrors (`100 - riskScore`) used by
+human reports; they are not an independent model signal. `Calibration.confidence`
+is the separate history-backing factor used only for the incident signal.
+
 ```
 calibrationConfidence = min(1, commits/300) × (0.4 + 0.6 × min(1, incidents/25))
 ```

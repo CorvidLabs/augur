@@ -180,3 +180,8 @@ duplicate/trailing slashes) before matching.
   ]
 }
 ```
+
+The primary score is `riskScore`; human and markdown reports show a derived
+`confidence = 100 - riskScore`, but that computed display value is not encoded as
+a top-level JSON field. `calibration.confidence` is different: it is the `0...1`
+backing factor for history-derived incident evidence.
