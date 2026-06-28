@@ -67,7 +67,7 @@ markers are tinted <span style="color:var(--proceed)">green&nbsp;(proceed)</span
 `█`/`░` risk meter is tinted by the same scale, file paths are
 <span style="color:var(--term-cyan)">cyan</span>, and secondary detail is dimmed.
 
-`--color` controls it, and applies to `check`, `gate`, and `explain`:
+`--color` controls the human-readable `check` report:
 
 | Mode | Behavior |
 |------|----------|
