@@ -250,6 +250,7 @@ public struct Assessment: Sendable, Equatable, Codable {
 public enum AugurError: Error, LocalizedError, Sendable {
     case notARepository(String)
     case git(command: String, status: Int32, stderr: String)
+    case invalidRange(endpoint: String)
     case noChanges
 
     public var errorDescription: String? {
@@ -260,6 +261,12 @@ public enum AugurError: Error, LocalizedError, Sendable {
             let base = "git \(command) failed (exit \(status))"
             let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return detail.isEmpty ? base : "\(base): \(detail)"
+        case .invalidRange(let endpoint):
+            return [
+                "Invalid range: \(endpoint) is GitHub's branch-creation sentinel, not a commit.",
+                "Choose an explicit base ref, for example origin/main..HEAD or",
+                "$(git merge-base origin/main HEAD)..HEAD.",
+            ].joined(separator: " ")
         case .noChanges:
             return "No changes found in the requested scope."
         }
