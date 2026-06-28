@@ -93,7 +93,7 @@ $ augur check --range main..HEAD --json | jq .verdict
 "review"
 ```
 
-In human reports, `confidence` is a display mirror of risk (`100 - riskScore`).
+In human reports, `confidence` is a display inverse of risk (`100 - riskScore`).
 The engine's primary output is still `riskScore` plus the derived verdict; the
 separate `calibration.confidence` field only says how much history backs the
 incident signal.

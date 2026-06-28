@@ -78,7 +78,7 @@ Every `Assessment` reports a `Calibration` (`confidence`, `totalCommits`,
 consumer knows whether a score is "guessing" or "grounded".
 
 The engine's primary output is risk. `Assessment.confidence` and
-`FileAssessment.confidence` are convenience mirrors (`100 - riskScore`) used by
+`FileAssessment.confidence` are convenience inverses (`100 - riskScore`) used by
 human reports; they are not an independent model signal. `Calibration.confidence`
 is the separate history-backing factor used only for the incident signal.
 
