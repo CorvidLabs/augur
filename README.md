@@ -139,6 +139,12 @@ Scoring has two layers:
    (`prior-only` → `weak` → `history-backed`) so you know whether a score is guessing or
    grounded. The longer `augur` watches a repo, the sharper it gets.
 
+The primary score is `riskScore` (`0...100`), and verdict thresholds are applied to that
+risk. Human and markdown reports also show `confidence`, but it is just the inverse
+(`100 - riskScore`) for readability. Do not confuse that with `calibration.confidence`,
+which is the separate `0...1` measure of how much repository history backs the incident
+signal.
+
 ## Usage
 
 ```sh
@@ -265,8 +271,8 @@ Each result's severity `level` is mapped from the file's verdict:
 
 The `message.text` summarizes the verdict, risk score, and top contributing signals; the
 location points at the file with a `region.startLine` of its first added line (when added
-lines are known); and `riskScore` / `confidence` / `verdict` are carried in
-`result.properties`.
+lines are known); and `riskScore` / derived `confidence` (`100 - riskScore`) / `verdict`
+are carried in `result.properties`.
 
 A runnable end-to-end demo is in [`examples/07-sarif.sh`](examples/07-sarif.sh), and a
 copy-paste CI workflow that uploads the SARIF is in
@@ -451,7 +457,6 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
   "scope": "main..HEAD",
   "riskScore": 45.0,
   "verdict": "review",
-  "confidence": 55.0,
   "calibration": { "confidence": 1.0, "totalCommits": 500, "incidentCommits": 156 },
   "thresholds": { "review": 35.0, "block": 65.0 },
   "files": [
@@ -488,7 +493,7 @@ attest verify --policy .attest.json                     # gate on it
 ```
 
 `attest sign --from-augur -` copies augur's `verdict` and maps its `riskScore` (0...100) to
-`confidence = 1 − riskScore/100`. A worked, end-to-end run is in
+a trust-record confidence (`1 − riskScore/100`). A worked, end-to-end run is in
 [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh): an agent attests a `review`
 change, a policy that demands human approval for `review`+ verdicts FAILs, then a human
 signs off and it PASSes.
@@ -574,8 +579,8 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 - [x] Reusable GitHub Action ("augur gate") for any repo: installs a prebuilt binary
   (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@v0`.
 - [x] **`attest`**: signed provenance records keyed to commit SHAs, a verifiable trail of
-  *what reviewed a change and at what confidence*. `augur` says how much to trust a change;
-  `attest` records that trust. See [Trust layer](#trust-layer-augur--attest) above and
+  *what reviewed a change and at what confidence*. `augur` scores change risk; `attest`
+  records the resulting trust claim. See [Trust layer](#trust-layer-augur--attest) above and
   [`examples/06-trust-pipeline.sh`](examples/06-trust-pipeline.sh).
 - [x] Cross-repo tool packaging: prebuilt augur binaries (macOS universal, Linux x86_64) so
   foreign repos gate without a Swift toolchain. (`attest` and `trust.yml` still build from a

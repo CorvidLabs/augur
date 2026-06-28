@@ -136,6 +136,9 @@ augur check --json | attest sign --from-augur -   # record the trust
 attest verify --policy .attest.json                # gate on it
 ```
 
+When `attest` imports Augur JSON, it maps Augur's `riskScore` to a trust-record
+confidence (`1 - riskScore/100`); Augur itself still treats risk as the primary score.
+
 A full, real-exit-code walkthrough lives in
 [`examples/06-trust-pipeline.sh`](../examples/06-trust-pipeline.sh): an agent
 attests a `review` change, a policy that demands human approval for `review`+

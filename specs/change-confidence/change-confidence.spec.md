@@ -24,7 +24,7 @@ depends_on: []
 
 ## Purpose
 
-Produce a deterministic, language-agnostic risk/confidence verdict for a set of changes
+Produce a deterministic, language-agnostic risk verdict for a set of changes
 so that **humans** can triage where to spend review attention and **agents** can decide
 whether to proceed or ask for human review. The core requires no API key and no LLM:
 every signal is derived from `git` history and the filesystem. Optional AI explanations
@@ -144,7 +144,7 @@ The scoring has two layers:
 ## Invariants
 
 - `Signal.risk`, `FileAssessment.riskScore / 100`, and `Calibration.confidence` are clamped to `0...1` (scores to `0...100`).
-- `FileAssessment.confidence == 100 - riskScore`; likewise for `Assessment`.
+- `FileAssessment.confidence == 100 - riskScore`; likewise for `Assessment`. This is a convenience inverse for reports, not an independent signal. `Assessment.jsonData()` encodes stored fields, so this computed value is not emitted as a top-level JSON key.
 - `Verdict.from(riskScore:)` uses the default thresholds: `< 35 → proceed`, `< 65 → review`, otherwise `block`. `Verdict.from(riskScore:thresholds:)` applies configurable cutoffs (`>= block → block`, `>= review → review`, else `proceed`), and with `Thresholds.default` is identical to the convenience overload.
 - `Thresholds` clamps `review` to be no greater than `block`, and both into `0...100`.
 - A single file scoring `>= 80` forces the overall verdict to at least `block`.

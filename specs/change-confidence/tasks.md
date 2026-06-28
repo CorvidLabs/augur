@@ -5,7 +5,7 @@
 - [x] `RepositoryProbe` protocol + `GitRepository` (numstat + single-pass log parsing).
 - [x] `HistorySnapshot` deriving churn, recency, ownership, coupling, incidents.
 - [x] Signals: sensitivity, test-gap, churn, coupling, diff-shape, ownership, incident.
-- [x] Two-layer scoring: heuristic prior + history calibration with reported confidence.
+- [x] Two-layer scoring: heuristic prior + history calibration with reported calibration confidence.
 - [x] `Verdict` thresholds + single-hot-file escalation.
 - [x] JSON and human reporters.
 - [x] CLI: `check`, `gate`, `explain` (AI delegated to fledge).

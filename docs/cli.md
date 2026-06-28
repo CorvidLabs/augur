@@ -5,7 +5,7 @@ augur <command> [options]
 ```
 
 Commands: [`check`](#check) (default), [`gate`](#gate), [`calibrate`](#calibrate),
-[`explain`](#explain). All commands require `git` on `PATH`. `augur` is macOS-only.
+[`explain`](#explain). All commands require `git` on `PATH`. `augur` runs on macOS and Linux.
 
 ## Scope (shared by `check`, `gate`, `explain`)
 
@@ -43,7 +43,7 @@ augur check --exclude 'vendor/**'    # drop paths from the assessment (repeatabl
 |------|--------|
 | `-v, --verbose` | Show every contributing signal per file (not just the top one). |
 | `--json` | Emit stable, sorted-key JSON. Mutually exclusive with `--markdown` and `--sarif`. |
-| `--markdown` | Emit a GitHub-flavored markdown report (verdict heading, confidence line, riskiest-first per-file table, sticky-comment marker). Mutually exclusive with `--json` and `--sarif`. See [ci-integration.md](ci-integration.md). |
+| `--markdown` | Emit a GitHub-flavored markdown report (verdict heading, derived confidence/calibration line, riskiest-first per-file table, sticky-comment marker). Mutually exclusive with `--json` and `--sarif`. See [ci-integration.md](ci-integration.md). |
 | `--sarif` | Emit SARIF 2.1.0. See [ci-integration.md](ci-integration.md). |
 | `--sarif-out <path>` | Write SARIF to a file (implies `--sarif`). |
 | `--cached` | Reuse the calibration cache instead of re-walking `git log`. |
@@ -157,3 +157,8 @@ duplicate/trailing slashes) before matching.
   ]
 }
 ```
+
+The primary score is `riskScore`; human and markdown reports show a derived
+`confidence = 100 - riskScore`, but that computed display value is not encoded as a
+top-level JSON field. `calibration.confidence` is different: it is the `0...1` backing
+factor for history-derived incident evidence.
