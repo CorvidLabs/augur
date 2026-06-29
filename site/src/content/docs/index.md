@@ -41,19 +41,25 @@ Every signal is derived from `git` history and the filesystem. No model, no netw
 | Signal | What it catches |
 |--------|-----------------|
 | **sensitivity** | Touches secrets, auth, crypto, payments, migrations, infra, CI, or dependency manifests. |
-| **test-gap** | Code changed with no test in the changeset, or, with a coverage report, the fraction of changed lines left uncovered. |
+| **test-gap** | Code changed with no test in the changeset, or, with a coverage report, the fraction of changed lines left uncovered. Never fires on documentation/prose files. |
 | **churn** | Hot files that change constantly are fragile. |
 | **coupling** | A file's usual co-change partner is *absent* from the change. |
 | **diff-shape** | Large single-file edits are harder to review. |
 | **ownership** | Bus-factor (single author) or diffuse ownership (many authors). |
 | **incident** | The file's own history of reverts / hotfixes. |
-| **codeowners** | A changed file with no declared owner in the repo's `CODEOWNERS`. |
+| **codeowners** | A changed file with no declared owner in the repo's `CODEOWNERS` (neutral when there is no `CODEOWNERS` file). |
 
 Scoring has two layers: a **transparent heuristic prior** with documented weights
 (always applies, even on a brand-new repo), and a **history calibration** that
 scales the incident signal by how much the repository's own revert/hotfix record
 backs it. Every assessment reports `calibration` (`prior-only` → `weak` →
 `history-backed`) so you know whether a score is guessing or grounded.
+
+The primary score is `riskScore` (`0...100`), and verdict thresholds are applied
+to that risk. Human and markdown reports also show `confidence`, but it is just
+the inverse (`100 - riskScore`) for readability. Do not confuse that display
+value with `calibration.confidence`, the separate `0...1` measure of how much
+repository history backs the incident signal.
 
 ---
 
