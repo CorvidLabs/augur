@@ -5,6 +5,7 @@
 
 [![augur](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/augur/badge.json)](https://corvidlabs.github.io/augur/)
 [![CI](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml/badge.svg)](https://github.com/CorvidLabs/augur/actions/workflows/ci.yml)
+[![spec coverage](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/augur/badges/coverage.json)](https://corvidlabs.github.io/augur/)
 [![Docs](https://img.shields.io/badge/docs-corvidlabs.github.io%2Faugur-blue)](https://corvidlabs.github.io/augur/)
 
 <p align="center">
