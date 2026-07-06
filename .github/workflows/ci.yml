@@ -333,7 +333,10 @@ jobs:
   attest:
     name: Record attestation
     runs-on: ubuntu-latest
-    needs: [build-test-macos, build-test-linux]
+    # Depend on every gate job, not just the build/test pair: an attestation
+    # records "proceed", so it must not sign off on a commit where any real check
+    # (the action smoke test, the Linux package, or the self-hosted guard) failed.
+    needs: [build-test-macos, build-test-linux, smoke-test-action, package-linux, guard-no-self-hosted]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # contents: write lets the step push refs/notes/attest.
     permissions:
