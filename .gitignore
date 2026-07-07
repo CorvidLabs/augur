@@ -6,3 +6,6 @@ DerivedData/
 .netrc
 # augur's local calibration cache (not committed; regenerate with `augur calibrate`).
 .augur/
+
+# Generated augur report used for signing commits.
+augur.json
