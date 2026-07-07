@@ -1,129 +1,21 @@
 {
   "calibration" : {
-    "confidence" : 0.18314666666666668,
-    "incidentCommits" : 17,
-    "totalCommits" : 68
+    "confidence" : 0.19136000000000003,
+    "incidentCommits" : 18,
+    "totalCommits" : 69
   },
   "excludedPaths" : [
 
   ],
   "files" : [
     {
-      "path" : ".github/workflows/release.yml",
-      "riskScore" : 32.05755946666667,
-      "signals" : [
-        {
-          "detail" : "matches sensitive category 'ci'",
-          "name" : "sensitivity",
-          "risk" : 0.6,
-          "weight" : 0.2024
-        },
-        {
-          "detail" : "code changed with no test in the changeset",
-          "name" : "test-gap",
-          "risk" : 0.7,
-          "weight" : 0.1656
-        },
-        {
-          "detail" : "10 recent commits touched this file",
-          "name" : "churn",
-          "risk" : 0.25,
-          "weight" : 0.138
-        },
-        {
-          "detail" : "no broken co-change pattern",
-          "name" : "coupling",
-          "risk" : 0,
-          "weight" : 0.1196
-        },
-        {
-          "detail" : "11 lines touched",
-          "name" : "diff-shape",
-          "risk" : 0.0275,
-          "weight" : 0.1104
-        },
-        {
-          "detail" : "single author (bus-factor)",
-          "name" : "ownership",
-          "risk" : 0.35,
-          "weight" : 0.092
-        },
-        {
-          "detail" : "implicated in past reverts/hotfixes (calibration 0.18)",
-          "name" : "incident",
-          "risk" : 0.14651733333333336,
-          "weight" : 0.092
-        },
-        {
-          "detail" : "no CODEOWNERS file",
-          "name" : "codeowners",
-          "risk" : 0,
-          "weight" : 0.08
-        }
-      ]
-    },
-    {
       "path" : ".github/workflows/post-release-formula.yml",
-      "riskScore" : 27.770359466666665,
+      "riskScore" : 28.1206096,
       "signals" : [
         {
           "detail" : "matches sensitive category 'ci'",
           "name" : "sensitivity",
           "risk" : 0.6,
-          "weight" : 0.2024
-        },
-        {
-          "detail" : "code changed with no test in the changeset",
-          "name" : "test-gap",
-          "risk" : 0.7,
-          "weight" : 0.1656
-        },
-        {
-          "detail" : "4 recent commits touched this file",
-          "name" : "churn",
-          "risk" : 0.1,
-          "weight" : 0.138
-        },
-        {
-          "detail" : "no broken co-change pattern",
-          "name" : "coupling",
-          "risk" : 0,
-          "weight" : 0.1196
-        },
-        {
-          "detail" : "14 lines touched",
-          "name" : "diff-shape",
-          "risk" : 0.035,
-          "weight" : 0.1104
-        },
-        {
-          "detail" : "2 authors",
-          "name" : "ownership",
-          "risk" : 0.1,
-          "weight" : 0.092
-        },
-        {
-          "detail" : "implicated in past reverts/hotfixes (calibration 0.18)",
-          "name" : "incident",
-          "risk" : 0.14651733333333336,
-          "weight" : 0.092
-        },
-        {
-          "detail" : "no CODEOWNERS file",
-          "name" : "codeowners",
-          "risk" : 0,
-          "weight" : 0.08
-        }
-      ]
-    },
-    {
-      "path" : "action.yml",
-      "riskScore" : 18.381759466666672,
-      "signals" : [
-        {
-          "detail" : "no sensitive paths",
-          "name" : "sensitivity",
-          "risk" : 0,
           "weight" : 0.2024
         },
         {
@@ -145,9 +37,63 @@
           "weight" : 0.1196
         },
         {
-          "detail" : "18 lines touched",
+          "detail" : "12 lines touched",
           "name" : "diff-shape",
-          "risk" : 0.045,
+          "risk" : 0.03,
+          "weight" : 0.1104
+        },
+        {
+          "detail" : "2 authors",
+          "name" : "ownership",
+          "risk" : 0.1,
+          "weight" : 0.092
+        },
+        {
+          "detail" : "implicated in past reverts/hotfixes (calibration 0.19)",
+          "name" : "incident",
+          "risk" : 0.15308800000000003,
+          "weight" : 0.092
+        },
+        {
+          "detail" : "no CODEOWNERS file",
+          "name" : "codeowners",
+          "risk" : 0,
+          "weight" : 0.08
+        }
+      ]
+    },
+    {
+      "path" : "augur.json",
+      "riskScore" : 21.5610096,
+      "signals" : [
+        {
+          "detail" : "no sensitive paths",
+          "name" : "sensitivity",
+          "risk" : 0,
+          "weight" : 0.2024
+        },
+        {
+          "detail" : "code changed with no test in the changeset",
+          "name" : "test-gap",
+          "risk" : 0.7,
+          "weight" : 0.1656
+        },
+        {
+          "detail" : "1 recent commits touched this file",
+          "name" : "churn",
+          "risk" : 0.025,
+          "weight" : 0.138
+        },
+        {
+          "detail" : "no broken co-change pattern",
+          "name" : "coupling",
+          "risk" : 0,
+          "weight" : 0.1196
+        },
+        {
+          "detail" : "181 lines touched",
+          "name" : "diff-shape",
+          "risk" : 0.4525,
           "weight" : 0.1104
         },
         {
@@ -157,9 +103,9 @@
           "weight" : 0.092
         },
         {
-          "detail" : "implicated in past reverts/hotfixes (calibration 0.18)",
+          "detail" : "implicated in past reverts/hotfixes (calibration 0.19)",
           "name" : "incident",
-          "risk" : 0.14651733333333336,
+          "risk" : 0.15308800000000003,
           "weight" : 0.092
         },
         {
@@ -171,7 +117,7 @@
       ]
     }
   ],
-  "riskScore" : 31.961876133333334,
+  "riskScore" : 27.972679600000003,
   "scope" : "origin/main..HEAD",
   "thresholds" : {
     "block" : 65,
