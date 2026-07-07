@@ -164,12 +164,13 @@ jobs:
             --clobber
 
   move-major-tag:
-    name: Move the major (v0) tag
+    name: Move the major tag
     runs-on: ubuntu-latest
-    # Only after both binaries are published, so `@v0` never points at a commit
-    # whose release lacks assets. Force-updates the major tag (v0 for v0.x.y) to
-    # this release's commit, so consumers can pin `uses: CorvidLabs/augur@v0` and
-    # track the latest 0.x without editing their workflow.
+    # Only after both binaries are published, so the major tag never points at a
+    # commit whose release lacks assets. Force-updates the major tag (1 for 1.x.y
+    # or v1 for v1.x.y) to this release's commit, so consumers can pin
+    # `uses: CorvidLabs/augur@1` or `@v1` and track the latest release without
+    # editing their workflow.
     needs: [build, upload-linux]
     permissions:
       contents: write
