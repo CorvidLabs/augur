@@ -211,6 +211,11 @@ public struct Calibration: Sendable, Equatable, Codable {
 
 /// The top-level result of an assessment.
 public struct Assessment: Sendable, Equatable, Codable {
+    /// The current machine-readable assessment schema version.
+    public static let currentSchemaVersion = 1
+
+    /// Version of the JSON contract represented by this assessment.
+    public let schemaVersion: Int
     public let scope: String
     public let riskScore: Double
     public let verdict: Verdict
@@ -228,8 +233,10 @@ public struct Assessment: Sendable, Equatable, Codable {
         calibration: Calibration,
         thresholds: Thresholds = .default,
         files: [FileAssessment],
-        excludedPaths: [String] = []
+        excludedPaths: [String] = [],
+        schemaVersion: Int = Assessment.currentSchemaVersion
     ) {
+        self.schemaVersion = schemaVersion
         self.scope = scope
         self.riskScore = riskScore
         self.verdict = verdict
@@ -243,6 +250,44 @@ public struct Assessment: Sendable, Equatable, Codable {
 
     /// The number of files excluded from this assessment.
     public var excludedCount: Int { excludedPaths.count }
+
+    /// Creates the canonical successful result for a scope with no changes.
+    /// - Parameter scope: The requested diff scope label.
+    /// - Returns: A complete assessment with zero risk and no files.
+    public static func empty(scope: String) -> Assessment {
+        Assessment(
+            scope: scope,
+            riskScore: 0,
+            verdict: .proceed,
+            calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
+            files: []
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case scope
+        case riskScore
+        case verdict
+        case calibration
+        case thresholds
+        case files
+        case excludedPaths
+    }
+
+    /// Decodes the current schema and legacy pre-versioned assessments.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+            ?? Self.currentSchemaVersion
+        self.scope = try container.decode(String.self, forKey: .scope)
+        self.riskScore = try container.decode(Double.self, forKey: .riskScore)
+        self.verdict = try container.decode(Verdict.self, forKey: .verdict)
+        self.calibration = try container.decode(Calibration.self, forKey: .calibration)
+        self.thresholds = try container.decodeIfPresent(Thresholds.self, forKey: .thresholds) ?? .default
+        self.files = try container.decode([FileAssessment].self, forKey: .files)
+        self.excludedPaths = try container.decodeIfPresent([String].self, forKey: .excludedPaths) ?? []
+    }
 }
 
 // MARK: - Errors

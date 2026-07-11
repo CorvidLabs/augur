@@ -273,25 +273,12 @@ struct Check: AsyncParsableCommand {
                 print(Reporter.render(assessment, verbose: verbose, color: colorOptions.enabled()))
             }
         } catch AugurError.noChanges {
+            let empty = Assessment.empty(scope: diffScope.label)
             if wantsSarif {
-                let empty = Assessment(
-                    scope: diffScope.label,
-                    riskScore: 0,
-                    verdict: .proceed,
-                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
-                    files: []
-                )
                 try emitSarif(empty, augur: augur, scope: diffScope)
             } else if json {
-                print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[],\"excludedPaths\":[]}")
+                print(try empty.jsonString())
             } else if markdown {
-                let empty = Assessment(
-                    scope: diffScope.label,
-                    riskScore: 0,
-                    verdict: .proceed,
-                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
-                    files: []
-                )
                 print(MarkdownReporter.render(empty))
             } else {
                 print("augur · no changes to assess")

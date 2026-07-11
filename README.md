@@ -460,6 +460,7 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
 
 ```json
 {
+  "schemaVersion": 1,
   "scope": "main..HEAD",
   "riskScore": 45.0,
   "verdict": "review",
@@ -471,6 +472,9 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
   "excludedPaths": [ "vendor/lib/huge.swift" ]
 }
 ```
+
+`schemaVersion` identifies the machine contract. Empty diffs use the same complete shape rather
+than a reduced special-case object, so consumers can decode every successful check uniformly.
 
 ## Development
 

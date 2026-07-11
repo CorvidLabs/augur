@@ -9,6 +9,7 @@
 - R5: Provide stable, sorted-key JSON output for agent consumption.
 - R6: Provide a `gate` mode that exits non-zero when the verdict meets a threshold.
 - R7: Keep `AugurKit` free of third-party dependencies; the CLI may depend on `swift-argument-parser`.
+- R8: Version the assessment JSON contract and emit the same complete shape for empty and non-empty diffs.
 
 ## Non-functional
 
