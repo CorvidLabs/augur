@@ -12,7 +12,7 @@ internal final class AssessmentJSONTests: XCTestCase {
 
         XCTAssertEqual(object["schemaVersion"] as? Int, Assessment.currentSchemaVersion)
         XCTAssertEqual(object["scope"] as? String, "main..HEAD")
-        XCTAssertEqual(object["riskScore"] as? Int, 0)
+        XCTAssertEqual(object["riskScore"] as? Double, 0.0)
         XCTAssertEqual(object["verdict"] as? String, "proceed")
         XCTAssertNotNil(object["calibration"] as? [String: Any])
         XCTAssertNotNil(object["thresholds"] as? [String: Any])
@@ -40,12 +40,14 @@ internal final class AssessmentJSONTests: XCTestCase {
     }
 
     internal func testEmptyAssessmentRoundTripsDeterministically() throws {
-        let original = Assessment.empty(scope: "staged")
+        let thresholds = Thresholds(review: 10, block: 20)
+        let original = Assessment.empty(scope: "staged", thresholds: thresholds)
         let first = try original.jsonData()
         let decoded = try JSONDecoder().decode(Assessment.self, from: first)
         let second = try decoded.jsonData()
 
         XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.thresholds, thresholds)
         XCTAssertEqual(second, first)
     }
 }

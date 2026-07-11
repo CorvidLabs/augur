@@ -252,14 +252,17 @@ public struct Assessment: Sendable, Equatable, Codable {
     public var excludedCount: Int { excludedPaths.count }
 
     /// Creates the canonical successful result for a scope with no changes.
-    /// - Parameter scope: The requested diff scope label.
+    /// - Parameters:
+    ///   - scope: The requested diff scope label.
+    ///   - thresholds: The configured review and block cutoffs.
     /// - Returns: A complete assessment with zero risk and no files.
-    public static func empty(scope: String) -> Assessment {
+    public static func empty(scope: String, thresholds: Thresholds = .default) -> Assessment {
         Assessment(
             scope: scope,
             riskScore: 0,
             verdict: .proceed,
             calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
+            thresholds: thresholds,
             files: []
         )
     }

@@ -28,7 +28,8 @@ public struct RiskEngine: Sendable {
 
     private let weights: Weights
     private let rules: [SensitivityRule]
-    private let thresholds: Thresholds
+    /// Risk-score cutoffs used for assessments produced by this engine.
+    public let thresholds: Thresholds
 
     /// Constructs the engine.
     /// - Parameters:
