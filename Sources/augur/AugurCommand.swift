@@ -202,17 +202,22 @@ struct ScopeOptions: ParsableArguments {
     }
 
     func makeAugur(config: ConfigOptions) throws -> (Augur, DiffScope) {
-        let (augur, scope, _) = try makeAugurWithExcludes(config: config)
+        let (augur, scope, _, _) = try makeAugurWithExcludes(config: config)
         return (augur, scope)
     }
 
     /// Like `makeAugur(config:)` but also returns the config's exclusion globs so
     /// callers can build a `PathFilter` combining them with CLI `--exclude`.
-    func makeAugurWithExcludes(config: ConfigOptions) throws -> (Augur, DiffScope, [String]) {
+    func makeAugurWithExcludes(config: ConfigOptions) throws -> (Augur, DiffScope, [String], Thresholds) {
         let repo = GitRepository(path: path)
         try repo.validate()
         let resolved = try config.resolved(repoPath: path)
-        return (Augur(probe: repo, engine: resolved.engine), resolvedScope(), resolved.excludes)
+        return (
+            Augur(probe: repo, engine: resolved.engine),
+            resolvedScope(),
+            resolved.excludes,
+            resolved.engine.thresholds
+        )
     }
 }
 
@@ -257,7 +262,7 @@ struct Check: AsyncParsableCommand {
     }
 
     func run() async throws {
-        let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
+        let (augur, diffScope, configExcludes, thresholds) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
         let filter = excludeOptions.resolvedFilter(configured: configExcludes)
         let codeOwners = codeOwnersOptions.resolved(repoPath: scope.path)
@@ -273,25 +278,12 @@ struct Check: AsyncParsableCommand {
                 print(Reporter.render(assessment, verbose: verbose, color: colorOptions.enabled()))
             }
         } catch AugurError.noChanges {
+            let empty = Assessment.empty(scope: diffScope.label, thresholds: thresholds)
             if wantsSarif {
-                let empty = Assessment(
-                    scope: diffScope.label,
-                    riskScore: 0,
-                    verdict: .proceed,
-                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
-                    files: []
-                )
                 try emitSarif(empty, augur: augur, scope: diffScope)
             } else if json {
-                print("{\"verdict\":\"proceed\",\"riskScore\":0,\"files\":[],\"excludedPaths\":[]}")
+                print(try empty.jsonString())
             } else if markdown {
-                let empty = Assessment(
-                    scope: diffScope.label,
-                    riskScore: 0,
-                    verdict: .proceed,
-                    calibration: Calibration(confidence: 0, totalCommits: 0, incidentCommits: 0),
-                    files: []
-                )
                 print(MarkdownReporter.render(empty))
             } else {
                 print("augur · no changes to assess")
@@ -374,7 +366,7 @@ struct Gate: AsyncParsableCommand {
         guard let limit = Verdict(rawValue: threshold) else {
             throw ValidationError("threshold must be one of: proceed, review, block")
         }
-        let (augur, diffScope, configExcludes) = try scope.makeAugurWithExcludes(config: configOptions)
+        let (augur, diffScope, configExcludes, _) = try scope.makeAugurWithExcludes(config: configOptions)
         let coverage = try coverageOptions.resolved(repoPath: scope.path)
         let filter = excludeOptions.resolvedFilter(configured: configExcludes)
         let codeOwners = codeOwnersOptions.resolved(repoPath: scope.path)
