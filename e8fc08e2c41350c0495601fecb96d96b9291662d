@@ -1,0 +1,1 @@
+{"commit":"e8fc08e2c41350c0495601fecb96d96b9291662d","confidence":0.9,"humanApproved":false,"note":"CI: swift build + test + augur self-gate green","reviewer":"agent:ci","testsPassed":true,"timestamp":1783913378,"verdict":"proceed"}
