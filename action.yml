@@ -49,11 +49,14 @@ runs:
         INPUT_VERSION: ${{ inputs.version }}
         ACTION_REF: ${{ github.action_ref }}
         ACTION_PATH: ${{ github.action_path }}
-        ACTION_REPO: ${{ github.action_repository }}
+        # Never inherit github.action_repository when nested under another
+        # composite (e.g. Trust): that becomes CorvidLabs/trust and
+        # `gh release download` misses augur-linux-x86_64 → source build → assess 143.
+        RELEASE_REPO: CorvidLabs/augur
       run: |
         set -euo pipefail
 
-        repo="${ACTION_REPO:-CorvidLabs/augur}"
+        repo="${RELEASE_REPO:-CorvidLabs/augur}"
 
         # Resolve which release to install, WITHOUT ever crossing a major
         # boundary. An explicit `version` wins; otherwise derive from the ref the
@@ -179,16 +182,27 @@ runs:
         # Best-effort second pass that only populates the verdict/risk outputs.
         # The gate step below re-runs and is what enforces the threshold, so a
         # hiccup here must never fail the job (hence the separate `augur check`).
+        # Time-bound: a hung assess (source-built binary / cancel) used to SIGTERM
+        # the step (exit 143) and skip Gate under Trust. Always exit 0.
         set +e
         verdict=""; risk=""
-        json="$("$AUGUR" check --range "$RANGE" --json 2>/dev/null)"
-        if [ -n "$json" ] && command -v jq >/dev/null 2>&1; then
+        if command -v timeout >/dev/null 2>&1; then
+          json="$(timeout 120 "$AUGUR" check --range "$RANGE" --json 2>/dev/null)"
+          rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::warning::augur assess timed out after 120s; leaving verdict empty — Gate will enforce."
+          fi
+        else
+          json="$("$AUGUR" check --range "$RANGE" --json 2>/dev/null)"
+        fi
+        if [ -n "${json:-}" ] && command -v jq >/dev/null 2>&1; then
           verdict="$(printf '%s' "$json" | jq -r '.verdict // empty')"
           risk="$(printf '%s' "$json" | jq -r '(.riskScore // 0) | round')"
         fi
         echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
         echo "risk=$risk" >> "$GITHUB_OUTPUT"
         echo "augur verdict: ${verdict:-unknown} · risk ${risk:-?}/100"
+        exit 0
 
     - name: Gate (fail at or above threshold)
       shell: bash
