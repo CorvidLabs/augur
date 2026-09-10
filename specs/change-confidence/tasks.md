@@ -78,6 +78,8 @@
 
 ## Next
 
-- [ ] Phase 2: `attest` — signed provenance records keyed to commit SHAs (a projection of `Assessment`).
-- [ ] Linux/Windows CI matrix and static binaries.
-- [ ] Cross-repo packaging of the `augur gate` action (install a published binary instead of building from the action's own checkout).
+- [x] Phase 2: `attest` records signed provenance projected from `Assessment` JSON.
+- [x] Linux CI and statically linked Linux release binaries.
+- [x] Cross-repo `augur gate` action installs published binaries.
+- [x] Version the `Assessment` JSON contract and unify empty/non-empty successful output.
+- [ ] Add Windows CI and release packaging when SwiftPM runner support is production-ready.

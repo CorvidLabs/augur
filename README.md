@@ -422,15 +422,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }  # gate needs history for the range
-      - uses: CorvidLabs/augur@v0
+      - uses: CorvidLabs/augur@1  # or a full commit SHA to pin exactly
         with:
           range: origin/main..HEAD
           threshold: block
           coverage: lcov.info       # optional
 ```
 
-Pin to the moving `@v0` tag to track the latest 0.x release, or to an exact tag
-(e.g. `@v0.3.0`) to lock a specific version.
+Pin to the moving `@1` tag to track the latest 1.x release, or to an exact tag
+(e.g. `@1.0.0`) or commit SHA to lock a specific version. There is no `@v0` tag:
+the 0.x line was published as `v0.1.0`…`v0.4.1` and 1.0.0 dropped the `v` prefix.
 
 | Input | Default | Description |
 |-------|---------|-------------|
@@ -460,6 +461,7 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
 
 ```json
 {
+  "schemaVersion": 1,
   "scope": "main..HEAD",
   "riskScore": 45.0,
   "verdict": "review",
@@ -471,6 +473,9 @@ verdict=$(augur check --range main..HEAD --json | jq -r .verdict)
   "excludedPaths": [ "vendor/lib/huge.swift" ]
 }
 ```
+
+`schemaVersion` identifies the machine contract. Empty diffs use the same complete shape rather
+than a reduced special-case object, so consumers can decode every successful check uniformly.
 
 ## Development
 
@@ -583,7 +588,7 @@ fledge run dogfood          # build release + assess & gate augur's last commit
 - [x] Configurable sensitivity rules, weights, and verdict thresholds (`.augur.toml`).
 - [x] Coverage-report ingestion (lcov/cobertura) for per-line test-gap precision (`--coverage`).
 - [x] Reusable GitHub Action ("augur gate") for any repo: installs a prebuilt binary
-  (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@v0`.
+  (macOS universal / Linux x86_64) and gates the caller's checkout — `uses: CorvidLabs/augur@1`.
 - [x] **`attest`**: signed provenance records keyed to commit SHAs, a verifiable trail of
   *what reviewed a change and at what confidence*. `augur` scores change risk; `attest`
   records the resulting trust claim. See [Trust layer](#trust-layer-augur--attest) above and

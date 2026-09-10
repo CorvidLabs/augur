@@ -159,6 +159,7 @@ duplicate/trailing slashes) before matching.
 
 ```jsonc
 {
+  "schemaVersion": 1,
   "scope": "working-tree",
   "riskScore": 19.18,
   "verdict": "proceed",
@@ -177,6 +178,9 @@ duplicate/trailing slashes) before matching.
   ]
 }
 ```
+
+`schemaVersion` versions this top-level machine contract independently of the CLI release. A
+genuinely empty diff emits this same complete shape with zero risk and empty file/exclusion arrays.
 
 The primary score is `riskScore`; human and markdown reports show a derived
 `confidence = 100 - riskScore`, but that computed display value is not encoded in

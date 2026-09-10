@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Version the `Assessment` JSON contract with `schemaVersion: 1`; legacy pre-versioned payloads
+  remain decodable.
+
+### Fixed
+
+- `augur check --json` now emits the same complete assessment shape when a diff has no changes,
+  including scope, calibration, thresholds, exclusions, and schema version.
+
 ## [v0.4.1] - 2026-06-28
 
 ### Fixes
@@ -101,4 +113,3 @@
 - Add: per-line coverage ingestion + augur-gate composite action (3a28011)
 - Add: configurable .augur.toml rules + augur calibrate cache (ab2867d)
 - Add: augur - deterministic change-confidence & risk engine (31ee79b)
-

@@ -27,6 +27,14 @@ preflight rejection of GitHub's all-zero branch-creation sentinel range endpoint
 | `testCalibrationCacheRoundTrips` | A `CalibrationCache` encodes→decodes→rebuilds into a snapshot scoring identically to the live one. |
 | `testCacheReportsBandAndConfidence` | The cache reports the correct calibration `band` and `confidence` for its volume. |
 
+## Assessment JSON (Tests/AugurKitTests/AssessmentJSONTests.swift)
+
+| Test | Asserts |
+|------|---------|
+| `testAssessmentJSONCarriesVersionedCompleteContract` | The stable payload includes schema version, scope, risk, verdict, calibration, thresholds, files, and exclusions. |
+| `testLegacyPreVersionedAssessmentStillDecodes` | Payloads written before schema versioning decode with v1/default fields. |
+| `testEmptyAssessmentRoundTripsDeterministically` | The canonical empty assessment round-trips to byte-identical JSON. |
+
 ## Manual / dogfood
 
 - `fledge run selfcheck` — run augur on its own working-tree changes.

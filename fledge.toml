@@ -25,3 +25,7 @@ description = "Run augur on augur's own working-tree changes (dogfood)"
 [tasks.dogfood]
 cmd = "swift build -c release && .build/release/augur check --range HEAD~1..HEAD && .build/release/augur gate --range HEAD~1..HEAD --threshold block"
 description = "Dogfood: build the release binary and have augur assess + gate its own last commit (mirrors CI)"
+
+[lanes.verify]
+description = "Build, test, and validate Augur contracts"
+steps = ["build", "test", "spec"]

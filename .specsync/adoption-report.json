@@ -1,0 +1,20 @@
+{
+  "bootstrap_policy": {
+    "base_commit": "d158bf1bcb483e08ad36403cede3c4d3629beab9",
+    "digest": "df3357e34b237875407857fb8dde7c885cde11a09938dd236361480243f1dc2d",
+    "path": ".specsync/sdd.json"
+  },
+  "generated_at": 1783830415,
+  "requirements_needing_ids": [
+    {
+      "action": "review and assign one stable ID per durable requirement",
+      "path": "specs/change-confidence/requirements.md",
+      "suggested_first_id": "REQ-change-confidence-001"
+    },
+    {
+      "action": "review and assign one stable ID per durable requirement",
+      "path": "specs/command-line-interface/requirements.md",
+      "suggested_first_id": "REQ-command-line-interface-001"
+    }
+  ]
+}
