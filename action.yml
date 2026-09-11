@@ -111,18 +111,37 @@ runs:
         tmp="$(mktemp -d)"
         bin=""
 
+        # Why the last download failed, kept so the fallback can say so. A
+        # download that fails for an environmental reason (no gh on the runner,
+        # a proxy, a token that cannot read this repository) used to be
+        # indistinguishable from a release that has no asset for this platform,
+        # because stderr went to /dev/null. What a consumer then saw was a
+        # Swift build error from the fallback, three steps downstream of the
+        # cause and pointing at the wrong thing entirely.
+        download_error=""
+
         download() {
           # Fetch $asset (+ sidecar) for the resolved release into $tmp. Returns
           # 0 only when the binary asset actually landed.
           rm -f "$tmp/$asset" "$tmp/$asset.sha256"
+          local err status
+          err="$tmp/gh-download.err"
           if [ "$mode" = "latest" ]; then
             gh release download --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
-              --dir "$tmp" --clobber 2>/dev/null || return 1
+              --dir "$tmp" --clobber 2>"$err"
           else
             gh release download "$target" --repo "$repo" \
               --pattern "$asset" --pattern "$asset.sha256" \
-              --dir "$tmp" --clobber 2>/dev/null || return 1
+              --dir "$tmp" --clobber 2>"$err"
+          fi
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            # First line only: gh is terse, and the whole of it belongs in the
+            # log rather than folded into a one-line warning.
+            download_error="$(head -n 1 "$err" 2>/dev/null)"
+            [ -s "$err" ] && sed 's/^/  /' "$err"
+            return 1
           fi
           [ -f "$tmp/$asset" ]
         }
@@ -155,14 +174,22 @@ runs:
         # tree) when no prebuilt binary fits this runner. Needs a Swift toolchain.
         if [ -z "$bin" ]; then
           if command -v swift >/dev/null 2>&1; then
-            echo "::warning::No prebuilt augur for $os/$arch; building from source. Add a Swift toolchain to speed this up or use a supported runner."
+            if [ -n "$download_error" ]; then
+              echo "::warning::Could not download the prebuilt augur for $os/$arch, so it is being built from source. The download failed with: ${download_error}"
+            else
+              echo "::warning::No prebuilt augur for $os/$arch; building from source. Add a Swift toolchain to speed this up or use a supported runner."
+            fi
             swift build -c release --package-path "$ACTION_PATH"
             # Ask SwiftPM for the bin dir rather than hardcoding .build/release
             # (mirrors release.yml; --show-bin-path only prints, never rebuilds).
             bindir="$(swift build -c release --package-path "$ACTION_PATH" --show-bin-path)"
             bin="$bindir/augur"
           else
-            echo "::error::No prebuilt augur binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            if [ -n "$download_error" ]; then
+              echo "::error::Could not download the prebuilt augur for $os/$arch, and there is no Swift toolchain to build one. The download failed with: ${download_error}"
+            else
+              echo "::error::No prebuilt augur binary for $os/$arch and no Swift toolchain to build one. Use macOS or Linux x86_64 runners, or install Swift first."
+            fi
             exit 1
           fi
         fi
