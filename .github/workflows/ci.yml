@@ -60,6 +60,15 @@ jobs:
       - run: swift build
       - run: swift test
       - run: fledge spec check
+      - name: Install hi (human-intent)
+        run: cargo install human-intent --version 0.3.3 --locked
+      - name: Check the intent files are structurally sound
+        # `hi check` fails only on structural problems in hi/*.md (a duplicate id,
+        # a case with no parent, an id colliding with a retired one, a malformed
+        # id, an undeclared family, a stranded criterion). It never fails on
+        # unfinished intent, so a green run says the ids are sound, not that the
+        # product is done.
+        run: hi check
       - name: Dogfood - build the release binary augur ships
         run: swift build -c release
       - name: Resolve the assessment range (meaningful on PRs)
