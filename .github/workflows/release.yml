@@ -95,6 +95,11 @@ jobs:
       - name: Mark workspace safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: Install Static Linux SDK
+        run: |
+          set -euo pipefail
+          swift sdk install https://download.swift.org/swift-6.0.2-release/static-sdk/swift-6.0.2-RELEASE/swift-6.0.2-RELEASE_static-linux-0.0.1.artifactbundle.tar.gz
+
       - name: Build release binary + sha256 sidecar
         run: |
           set -euo pipefail
@@ -102,14 +107,16 @@ jobs:
           # Without it the binary dynamically links libswiftCore.so etc., which a
           # bare ubuntu-latest runner (no Swift toolchain) lacks -- so the action's
           # whole "no toolchain needed" promise fails with a missing-.so error.
-          swift build -c release --static-swift-stdlib
-          cp "$(swift build -c release --static-swift-stdlib --show-bin-path)/augur" augur-linux-x86_64
+          swift build -c release --swift-sdk x86_64-swift-linux-musl --static-swift-stdlib
+          cp "$(swift build -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)/augur" augur-linux-x86_64
           # `file` is just a diagnostic and is absent from the swift container.
           file augur-linux-x86_64 || true
           # ldd is best-effort: fail loudly if any Swift runtime .so is still
           # dynamically linked (a guard against silently shipping a broken binary).
           ldd augur-linux-x86_64 2>/dev/null | grep -i swift && \
             { echo "::error::binary still dynamically links the Swift runtime"; exit 1; } || true
+          ldd augur-linux-x86_64 2>/dev/null | grep -i libxml && \
+            { echo "::error::binary still links libxml2"; exit 1; } || true
           sha256sum augur-linux-x86_64 | cut -d' ' -f1 > augur-linux-x86_64.sha256
           cat augur-linux-x86_64.sha256
 
